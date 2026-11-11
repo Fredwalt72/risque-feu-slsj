@@ -84,7 +84,17 @@
   .entete-bloc{display:flex;align-items:center;gap:6px;padding:2px 2px 2px 10px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;min-height:44px;box-sizing:border-box}
   .entete-bloc .titre-bloc{font-weight:700;color:#0A5C6E;font-size:.92rem}
   .bascule-bloc{margin-left:auto;flex:none;width:42px;height:42px;background:none;border:0;font-size:1.4rem;font-weight:700;line-height:1;color:#0A5C6E;cursor:pointer;padding:0}
-  .corps-bloc{overflow-y:auto;overscroll-behavior:contain}
+  /* Les corps de blocs ne sont PLUS des conteneurs défilants : la
+     colonne est la seule à défiler. Correctif 2026-11-11 (bug vécu :
+     « je ne vois pas le bas de la fenêtre pour le prix du bois ») —
+     en overflow-y:auto, chaque corps grandissait à la hauteur de son
+     contenu (course nulle) mais captait quand même le geste tactile
+     ou la molette, et son overscroll-behavior:contain interdisait de
+     transmettre le défilement à la colonne : le bas de la légende —
+     section « Valeur du bois » comprise — était inatteignable au
+     doigt. Seules les deux fiches (max-height propre, contenu long)
+     gardent leur défilement interne, posé sur leurs règles #fiche-*. */
+  .corps-bloc{overflow:visible}
   .corps-bloc.ferme{display:none}
   .panneau-cad{font-size:.88rem;line-height:1.4}
   .panneau-cad label{font-weight:700;color:#0A5C6E;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:.92rem}
@@ -98,7 +108,7 @@
   #liste-lots li:hover,#liste-lots li:active{background:#fdf3e3}
   #msg-lot{font-size:.82rem;color:#0A5C6E;margin:5px 0 0;min-height:1em}
   #bloc-fiche{display:none}
-  #fiche-lot{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:26vh}
+  #fiche-lot{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:26vh;overflow-y:auto;overscroll-behavior:contain}
   /* ===== Espace client : fiche de lot (résumés précalculés, aucun risque) ===== */
   /* La fiche client est un panneau FIXE centré en haut de l'écran,
      juste SOUS l'indicateur central (demande du propriétaire, capture
@@ -112,7 +122,7 @@
      − / + reste là pour la replier. Le panneau Cadastre, lui, reste
      dans la colonne, inchangé. */
   #bloc-fiche-client{position:fixed;top:104px;left:50%;transform:translateX(-50%);width:min(560px,92vw);z-index:1500;display:none}
-  #fiche-client{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:calc(58vh - 44px)}
+  #fiche-client{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:calc(58vh - 44px);overflow-y:auto;overscroll-behavior:contain}
   #fiche-client b{font-size:1rem}
   #fiche-client .titre-section{font-weight:700;color:#0A5C6E;margin-top:8px}
   #fiche-client .ligne-detail{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #e9e2cf;padding:2px 0}
