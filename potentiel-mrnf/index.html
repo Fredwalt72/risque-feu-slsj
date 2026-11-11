@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Potentiel d'intensité et de propagation des feux de forêt (MRNF) — Lac-Saint-Jean et Saguenay</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --petrole:#0A5C6E; --soleil:#E8A33D; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; height:100%; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  header { background:var(--petrole); color:#fff; padding:10px 14px; border-bottom:4px solid var(--soleil); }
+  header h1 { margin:0; font-size:17px; line-height:1.3; font-weight:700; }
+  header p { margin:3px 0 0; font-size:12.5px; opacity:.92; }
+  #map { position:absolute; top:0; bottom:0; left:0; right:0; }
+  #wrap { position:relative; height:calc(100% - 64px); }
+  .panneau {
+    position:absolute; z-index:1000; left:10px; top:10px; width:308px; max-width:calc(100vw - 20px);
+    background:rgba(255,255,255,.97); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.3);
+    padding:12px 14px; font-size:13px; color:#1c2b30; max-height:calc(100% - 20px); overflow-y:auto;
+  }
+  .panneau h2 { margin:0 0 6px; font-size:14px; color:var(--petrole); }
+  .panneau p { margin:0 0 8px; line-height:1.45; }
+  .legende { list-style:none; margin:6px 0 10px; padding:0; }
+  .legende li { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  .pastille { width:18px; height:18px; border-radius:4px; border:1px solid rgba(0,0,0,.35); flex:none; }
+  .legende .pct { margin-left:auto; color:#555; font-size:12px; }
+  label.opacite { display:block; margin:8px 0 2px; font-weight:600; color:var(--petrole); }
+  input[type=range] { width:100%; accent-color:var(--petrole); }
+  .petit { font-size:12px; color:#444; line-height:1.5; }
+  .petit a { color:var(--petrole); }
+  .badge { display:inline-block; background:var(--soleil); color:#231600; font-weight:700; font-size:11px;
+           padding:2px 8px; border-radius:20px; margin-bottom:8px; }
+  #boutonInfos { position:absolute; z-index:1001; right:10px; bottom:24px; background:var(--petrole); color:#fff;
+    border:2px solid var(--soleil); border-radius:24px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  @media (max-width:640px){ header h1{ font-size:15px; } .panneau{ width:auto; right:10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Potentiel d'intensité et de propagation des feux de forêt (MRNF)</h1>
+  <p>Lac-Saint-Jean et Saguenay — couche officielle du ministère des Ressources naturelles et des Forêts</p>
+</header>
+<div id="wrap">
+  <div id="map"></div>
+
+  <div class="panneau" id="panneau">
+    <span class="badge">PRODUIT OFFICIEL DU MRNF</span>
+    <h2>Qu'est-ce que cette carte ?</h2>
+    <p>Cette carte montre, pour chaque secteur, <strong>avec quelle force et quelle vitesse un feu
+       pourrait brûler SI un feu partait là</strong> — selon les combustibles forestiers présents
+       (types de peuplements, d'après la carte écoforestière).</p>
+    <p><strong>Elle ne dit pas la probabilité qu'un feu parte.</strong> L'allumage dépend de la météo,
+       de l'humidité et de la saison : pour le danger du jour, c'est l'indice de la SOPFEU qu'il faut consulter.</p>
+
+    <h2>Légende — potentiel d'intensité et de propagation</h2>
+    <ul class="legende">
+      <li><span class="pastille" style="background:#000000"></span>Extrême<span class="pct">18,2&nbsp;%</span></li>
+      <li><span class="pastille" style="background:#FF0000"></span>Élevé<span class="pct">37,4&nbsp;%</span></li>
+      <li><span class="pastille" style="background:#E69800"></span>Considérable<span class="pct">26,3&nbsp;%</span></li>
+      <li><span class="pastille" style="background:#E6E600"></span>Modéré<span class="pct">11,9&nbsp;%</span></li>
+      <li><span class="pastille" style="background:#38A800"></span>Faible<span class="pct">2,2&nbsp;%</span></li>
+      <li><span class="pastille" style="background:#B2B2B2"></span>Absence de combustible forestier<span class="pct">4,1&nbsp;%</span></li>
+    </ul>
+    <p class="petit">Pourcentages calculés sur la fenêtre affichée (Lac-Saint-Jean / Saguenay sud).
+       Couleurs : symbologie officielle du MRNF, tirée du fichier de couche fourni avec les données.</p>
+
+    <label class="opacite" for="opacite">Opacité de la couche MRNF</label>
+    <input type="range" id="opacite" min="0" max="100" value="85">
+
+    <p class="petit" style="margin-top:10px">
+       <strong>Source :</strong> MRNF, Direction de la protection des forêts — « Potentiel d'intensité et de
+       propagation des feux de forêt », diffusé sur
+       <a href="https://www.donneesquebec.ca/recherche/dataset/potentiel-d-intensite-et-de-propagation-des-feux-de-foret" target="_blank" rel="noopener">Données Québec</a>
+       (mise à jour annuelle ; données 2025). Grille d'origine de 25&nbsp;m, rééchantillonnée ici à environ
+       100&nbsp;m pour l'affichage web. Licence CC-BY 4.0 — données © MRNF.<br>
+       <em>Page de visualisation non officielle, produite à partir des données ouvertes du MRNF.</em></p>
+  </div>
+  <button id="boutonInfos" type="button">Masquer le panneau</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  var bornes = L.latLngBounds([47.6996, -73.6002], [50.1003, -69.8991]);
+  var map = L.map('map', { maxBounds: bornes.pad(0.35) }).setView([48.55, -72.0], 9);
+
+  var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributeurs',
+    maxZoom: 18
+  });
+  var satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Imagerie &copy; Esri — Source: Esri, Maxar, Earthstar Geographics',
+    maxZoom: 18
+  });
+  osm.addTo(map);
+
+  var mrnf = L.tileLayer('tuiles/{z}/{x}/{y}.png', {
+    attribution: 'Potentiel d\'intensité et de propagation &copy; <a href="https://www.donneesquebec.ca/recherche/dataset/potentiel-d-intensite-et-de-propagation-des-feux-de-foret">MRNF</a> (CC-BY 4.0)',
+    bounds: bornes, minZoom: 8, maxZoom: 12, opacity: 0.85
+  });
+  mrnf.addTo(map);
+
+  L.control.layers(
+    { 'OpenStreetMap': osm, 'Satellite (Esri)': satellite },
+    { 'Potentiel MRNF': mrnf },
+    { collapsed: false }
+  ).addTo(map);
+  L.control.scale({ imperial: false }).addTo(map);
+
+  var curseur = document.getElementById('opacite');
+  curseur.addEventListener('input', function () { mrnf.setOpacity(curseur.value / 100); });
+
+  var panneau = document.getElementById('panneau');
+  var bouton = document.getElementById('boutonInfos');
+  bouton.addEventListener('click', function () {
+    var visible = panneau.style.display !== 'none';
+    panneau.style.display = visible ? 'none' : 'block';
+    bouton.textContent = visible ? 'Afficher le panneau' : 'Masquer le panneau';
+  });
+})();
+</script>
+</body>
+</html>

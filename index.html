@@ -1,0 +1,3241 @@
+<!DOCTYPE html>
+<!-- © 2026 Frédéric Waltzing — Tous droits réservés. Méthode, scores, cartographie et code protégés par la Loi sur le droit d'auteur (Canada). Reproduction interdite sans autorisation écrite. Données écoforestières © MRNF, licence ouverte. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risque de feu par peuplement — Terres privées du Saguenay–Lac-Saint-Jean</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html,body{margin:0;padding:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1c2b26;background:#f4f1ea}
+  header{background:#0A5C6E;color:#fff;padding:14px 18px;flex:none}
+  header .ligne-bandeau{display:flex;align-items:flex-start;gap:8px}
+  header h1{margin:0;font-size:1.25rem;flex:1 1 auto}
+  header p{margin:4px 0 0;font-size:.88rem;opacity:.92}
+  .badge{display:inline-block;background:#E8A33D;color:#20242a;border-radius:10px;padding:1px 8px;font-size:.75rem;font-weight:700;margin-left:6px;vertical-align:middle}
+  /* Bandeau réductible : réduit = une ligne mince (titre + badge « Œuvre
+     protégée ») ; le bouton a la même allure que ceux des blocs de la carte.
+     La préférence est retenue sur l'appareil (localStorage). */
+  #bascule-bandeau{margin-left:auto;flex:none;width:42px;height:42px;background:none;border:0;font-size:1.4rem;font-weight:700;line-height:1;color:#fff;cursor:pointer;padding:0}
+  header.bandeau-reduit{padding-top:7px;padding-bottom:7px}
+  header.bandeau-reduit .badge-secondaire{display:none}
+  header.bandeau-reduit p{display:none}
+  header.bandeau-reduit h1{font-size:1.08rem}
+  /* Zone plein écran utile : bandeau + carte tiennent dans la hauteur de
+     l'écran (100dvh) sans défilement de la page ; la carte prend tout
+     l'espace restant et grandit quand le bandeau se réduit. Les sections
+     sous la carte (fiche, statistiques, méthode) suivent, en défilant. */
+  #zone-ecran{display:flex;flex-direction:column}
+  #zone-ecran.avec-carte{height:100vh;height:100dvh}
+  #zone-protegee{display:flex;flex-direction:column}
+  #zone-ecran.avec-carte #zone-protegee{flex:1 1 auto;min-height:0}
+  #zone-carte{flex:1 1 auto;min-height:0;display:flex}
+  #map{flex:1 1 auto;min-height:0}
+  #panneau{padding:14px 18px;background:#fff;border-top:1px solid #ddd}
+  #panneau h2{margin:6px 0;font-size:1.05rem}
+  .classe{font-weight:800}
+  .score{font-size:1.7rem;font-weight:800}
+  ul.raisons{margin:6px 0 6px 18px;padding:0}
+  .legende{font-size:.85rem;line-height:1.55;padding:0 10px 10px}
+  .legende i{display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:7px;border:1px solid rgba(0,0,0,.35);vertical-align:-2px}
+  section{padding:16px 18px;max-width:1000px}
+  section h2{color:#0A5C6E;margin-bottom:6px}
+  table.stats{border-collapse:collapse;margin:8px 0}
+  table.stats td,table.stats th{border:1px solid #ccc;padding:5px 12px;text-align:left}
+  .pastille{display:inline-block;width:13px;height:13px;border-radius:3px;margin-right:7px;border:1px solid rgba(0,0,0,.35);vertical-align:-2px}
+  footer{padding:14px 18px;font-size:.82rem;color:#555;border-top:1px solid #ddd}
+  .avertissement{background:#fdf3e3;border:1px solid #E8A33D;border-radius:8px;padding:10px 12px;font-size:.9rem}
+  #etat{font-size:.85rem;color:#0A5C6E;margin-top:10px}
+  #verrou{max-width:560px;margin:26px auto;background:#fff;border:1px solid #0A5C6E;border-radius:10px;padding:20px 22px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  #verrou h2{margin-top:0}
+  #form-code{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  #champ-code{flex:1 1 220px;padding:10px 12px;font-size:1rem;border:1px solid #999;border-radius:6px}
+  #bouton-deverrouiller{background:#0A5C6E;color:#fff;border:0;border-radius:6px;padding:10px 18px;font-size:1rem;font-weight:700;cursor:pointer}
+  #bouton-deverrouiller:disabled{opacity:.6;cursor:wait}
+  #err-code{color:#b00020;font-weight:600;display:none}
+  #msg-verrou{color:#0A5C6E;font-size:.9rem}
+  #avert-appareil{background:#fdf3e3;border:1px solid #E8A33D;border-radius:8px;padding:10px 12px;font-size:.92rem;font-weight:600}
+  #bloc-question{margin-top:16px;border-top:1px solid #ddd;padding-top:14px;display:none}
+  #form-reponse{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  #champ-reponse{flex:1 1 220px;padding:10px 12px;font-size:1rem;border:1px solid #999;border-radius:6px}
+  #bouton-reponse{background:#0A5C6E;color:#fff;border:0;border-radius:6px;padding:10px 18px;font-size:1rem;font-weight:700;cursor:pointer}
+  #bouton-reponse:disabled{opacity:.6;cursor:wait}
+  #bouton-verrouiller{background:#fff;color:#0A5C6E;border:1px solid #0A5C6E;border-radius:6px;padding:6px 12px;font-size:.85rem;font-weight:700;cursor:pointer;margin-top:14px}
+  .legende .taux-lot{white-space:nowrap}
+  .legende input.taux{width:48px;padding:1px 4px;font-size:.82rem;border:1px solid #999;border-radius:4px;margin-left:5px}
+  .legende .note-taux{font-size:.72rem;color:#666}
+  #fiche-lot table.prime{border-collapse:collapse;margin:6px 0;width:100%}
+  #fiche-lot table.prime th,#fiche-lot table.prime td{border:1px solid #e3ddcf;padding:2px 5px;font-size:.78rem;text-align:right}
+  #fiche-lot table.prime th:first-child,#fiche-lot table.prime td:first-child{text-align:left}
+  #fiche-lot .prime-totale{font-size:1.02rem;font-weight:800;color:#0A5C6E}
+  /* ===== Colonne de panneaux sur la carte (construite après déverrouillage) :
+     cadastre, fiche de lot et légende empilés dans UNE seule colonne à gauche ;
+     chaque bloc se réduit à sa barre de titre (bouton − / + de 42 px, ou tap
+     sur l'entête) — les blocs ne se chevauchent jamais. ===== */
+  .colonne-panneaux{display:flex;flex-direction:column;gap:8px;width:min(340px,calc(100vw - 124px));max-height:calc(100dvh - 176px);overflow-y:auto;overscroll-behavior:contain;padding:2px;touch-action:pan-y}
+  /* Bouton du choix de carte (Plan/Satellite) rapetissé à la taille du
+     bouton « + » du zoom (30 × 30 px), icône réduite en proportion.
+     Sélecteurs renforcés : l'habillage tactile de Leaflet passerait le
+     bouton à 44 × 44 px et écrasait la règle simple. La colonne, elle,
+     laisse 124 px libres à gauche pour ne plus couvrir le zoom. */
+  .leaflet-control-layers .leaflet-control-layers-toggle,
+  .leaflet-touch .leaflet-control-layers-toggle{width:30px;height:30px;background-size:20px 20px}
+  .bloc-panneau{background:#fff;border-radius:8px;box-shadow:0 1px 5px rgba(0,0,0,.35);overflow:hidden;flex:none}
+  .entete-bloc{display:flex;align-items:center;gap:6px;padding:2px 2px 2px 10px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;min-height:44px;box-sizing:border-box}
+  .entete-bloc .titre-bloc{font-weight:700;color:#0A5C6E;font-size:.92rem}
+  .bascule-bloc{margin-left:auto;flex:none;width:42px;height:42px;background:none;border:0;font-size:1.4rem;font-weight:700;line-height:1;color:#0A5C6E;cursor:pointer;padding:0}
+  .corps-bloc{overflow-y:auto;overscroll-behavior:contain}
+  .corps-bloc.ferme{display:none}
+  .panneau-cad{font-size:.88rem;line-height:1.4}
+  .panneau-cad label{font-weight:700;color:#0A5C6E;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:.92rem}
+  .panneau-cad input[type=checkbox]{width:19px;height:19px;accent-color:#0A5C6E;flex:none}
+  .panneau-cad .corps{padding:0 10px 10px}
+  #champ-lot{width:100%;box-sizing:border-box;padding:7px 9px;font-size:.95rem;border:1px solid #999;border-radius:6px}
+  #liste-lots{list-style:none;margin:4px 0 0;padding:0;max-height:192px;overflow:auto;border:1px solid #ccc;border-radius:6px}
+  #liste-lots:empty{display:none}
+  #liste-lots li{padding:7px 9px;cursor:pointer;border-bottom:1px solid #eee;font-weight:600}
+  #liste-lots li:last-child{border-bottom:0}
+  #liste-lots li:hover,#liste-lots li:active{background:#fdf3e3}
+  #msg-lot{font-size:.82rem;color:#0A5C6E;margin:5px 0 0;min-height:1em}
+  #bloc-fiche{display:none}
+  #fiche-lot{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:26vh}
+  /* ===== Espace client : fiche de lot (résumés précalculés, aucun risque) ===== */
+  /* La fiche client est un panneau FIXE centré en haut de l'écran,
+     juste SOUS l'indicateur central (demande du propriétaire, capture
+     annotée à l'appui : la fiche entière « au-dessous de l'indicateur »,
+     au centre — pas un résumé séparé). Elle sort donc visuellement de
+     la colonne de panneaux : position fixe, largeur max 560 px (92 vw
+     sur petit écran), corps défilant (hauteur totale ≈ 58 vh, entête
+     comprise). z-index 1500 : au-dessus de la carte et des panneaux
+     Leaflet (1000), sous la pastille de l'indicateur (2000). Masquée
+     (display:none) tant qu'aucune recherche n'a été lancée ; l'entête
+     − / + reste là pour la replier. Le panneau Cadastre, lui, reste
+     dans la colonne, inchangé. */
+  #bloc-fiche-client{position:fixed;top:104px;left:50%;transform:translateX(-50%);width:min(560px,92vw);z-index:1500;display:none}
+  #fiche-client{background:#fdf3e3;font-size:.85rem;line-height:1.45;padding:8px 10px;max-height:calc(58vh - 44px)}
+  #fiche-client b{font-size:1rem}
+  #fiche-client .titre-section{font-weight:700;color:#0A5C6E;margin-top:8px}
+  #fiche-client .ligne-detail{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #e9e2cf;padding:2px 0}
+  #fiche-client .ligne-detail .val{white-space:nowrap}
+  #fiche-client .total-client{font-size:1.02rem;font-weight:800;color:#0A5C6E;margin-top:8px}
+  /* Révélation étagée de la fiche client : rond qui tourne pendant le
+     « Calcul en cours… », puis chaque élément apparaît en fondu léger. */
+  .attente-calcul{display:flex;align-items:center;gap:10px;font-weight:600;color:#0A5C6E}
+  .rond-calcul{width:22px;height:22px;flex:none;border-radius:50%;border:3px solid #cfe3e7;border-top-color:#0A5C6E;animation:tourne-calcul .8s linear infinite}
+  @keyframes tourne-calcul{to{transform:rotate(360deg)}}
+  #fiche-client .ligne-revelee{animation:fondu-revel .45s ease both}
+  @keyframes fondu-revel{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  /* ===== Mode client épuré : bandeau réduit en permanence (bouton − / +
+     masqué pour ce rôle) ; l'écran se limite au bandeau mince et à la
+     carte plein écran, sans aucune section sous la carte. ===== */
+  body.mode-client #bascule-bandeau{display:none}
+  #bouton-verrouiller-client{background:#fff;color:#0A5C6E;border:1px solid #0A5C6E;border-radius:6px;padding:5px 10px;font-size:.8rem;font-weight:700;cursor:pointer;margin-top:8px}
+  .panneau-cad .instruction-client{margin:0 0 8px;font-weight:600;color:#0A5C6E}
+  /* ===== Prime indicative de la fiche client : élément vedette, en fin
+     de séquence. Seuls les deux montants finaux arrivent du serveur —
+     ni taux, ni classes, ni hectares par classe ne sont exposés. ===== */
+  #fiche-client .prime-vedette{margin-top:10px;border:3px solid #0A5C6E;background:#fdf3e3;border-radius:10px;padding:10px 12px;text-align:center}
+  #fiche-client .prime-vedette .titre-section{margin-top:0;font-size:1rem}
+  #fiche-client .prime-choix{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;margin:4px 0 2px}
+  #fiche-client .prime-choix label{font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px}
+  #fiche-client .prime-choix input{width:19px;height:19px;accent-color:#0A5C6E}
+  #fiche-client .prime-montant{font-size:2.1rem;font-weight:800;color:#0A5C6E;line-height:1.15;margin:2px 0}
+  #fiche-client .prime-mention{font-size:.74rem;color:#555;margin:4px 0 0}
+  #fiche-client .prime-consulter{font-weight:600;color:#0A5C6E;margin:10px 0 2px}
+  /* Valeur estimée du bois (fiche client) : dernière révélation de la
+     séquence, juste après l'encadré prime. */
+  #fiche-client .valeur-client{font-size:1.02rem;font-weight:700;color:#0A5C6E;margin:10px 0 2px}
+  /* Valeur estimée du bois (fiches propriétaire) et section repliable
+     « Valeur du bois » de la légende. */
+  #fiche-lot .valeur-ligne{display:block;margin-top:6px;font-size:.95rem;color:#0A5C6E}
+  .legende details.section-valeur{margin-top:6px}
+  .legende details.section-valeur summary{cursor:pointer;padding:2px 0}
+  /* Recalcul de franchise (fiche client) : pendant l'attente de 9 à
+     12 s, le montant laisse place à ce texte d'attente NET, en bloc.
+     L'ancien montage (petit rond .rond-calcul en ligne dans
+     .prime-montant) ne tournait pas : un span est inline — width et
+     height y sont ignorés et transform ne s'applique pas aux éléments
+     inline non remplacés, donc l'animation de rotation était sans
+     effet et le rendu médiocre. L'animation vit dans l'indicateur
+     central ci-dessous. */
+  #fiche-client .prime-recalcul{display:block;font-size:1rem;font-weight:600;color:#0A5C6E;padding:10px 0}
+  /* Sélection multiple de lots (dossier) : liste dans le panneau
+     Cadastre des deux espaces — numéros, retrait individuel, tout
+     effacer, et bouton d'ouverture de la fiche du dossier dès 2 lots. */
+  .sel-titre{font-weight:700;margin:8px 0 2px}
+  .sel-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0}
+  .sel-item button,.sel-actions button{cursor:pointer;border:1px solid #0A5C6E;background:#fff;color:#0A5C6E;border-radius:6px;padding:3px 8px;font-size:.85em}
+  .sel-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .sel-actions .sel-voir{background:#0A5C6E;color:#fff;font-weight:700}
+  /* Avis « Propriété non assurable » (règle interne du boisé
+     minimum — le seuil n'apparaît dans AUCUN texte visible) : remplace
+     l'encadré/section de prime quand le boisé affiché est sous le
+     seuil. */
+  .avis-non-assurable{font-weight:700;font-size:1.08rem;text-align:center;color:#7a1a14;background:#fdecea;border:1.5px solid #b3261e;border-radius:8px;padding:12px 10px;margin:10px 0}
+  /* ===== Indicateur de calcul central (fiche client seulement) :
+     pastille fixe centrée en haut de l'écran, juste sous le bandeau
+     mince du mode client, au-dessus de la carte et des panneaux
+     (z-index 2000). C'est L'indicateur de la séquence client : phase
+     de calcul, recherches caserne puis SOPFEU, attente de la prime,
+     recalcul de franchise. Fond pétrole, texte blanc, rond blanc à
+     segment jaune — bien visible. Il disparaît quand la prime (ou
+     le montant recalculé) est affichée. ===== */
+  #indicateur-calcul{position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:2000;display:none;align-items:center;gap:10px;background:#0A5C6E;color:#fff;font-weight:600;font-size:.95rem;padding:9px 18px;border-radius:999px;box-shadow:0 3px 12px rgba(0,0,0,.45);max-width:92vw;white-space:nowrap}
+  #indicateur-calcul.visible{display:flex}
+  #indicateur-calcul .rond-calcul{width:20px;height:20px;border-color:rgba(255,255,255,.35);border-top-color:#E8A33D}
+  /* Franchise (fiche propriétaire) */
+  #fiche-lot select#choix-franchise{font-size:.85rem;padding:2px 4px;border:1px solid #999;border-radius:4px}
+  .legende input.franchise-ajout{width:48px;padding:1px 4px;font-size:.82rem;border:1px solid #999;border-radius:4px;margin-left:5px}
+  .legende input.majo-caserne,.legende input.majo-sopfeu,.legende input.frais-ouverture,.legende input.frais-minimum{width:48px;padding:1px 4px;font-size:.82rem;border:1px solid #999;border-radius:4px;margin-left:5px}
+  .bouton-localiser{background:#fff;border:none;width:30px;height:30px;font-size:16px;line-height:30px;cursor:pointer;display:block;text-align:center;padding:0}
+  .dist-client{margin:6px 0;font-size:.92rem}
+  #fiche-lot b{font-size:1rem}
+  #effacer-lot{background:#fff;border:1px solid #0A5C6E;color:#0A5C6E;border-radius:5px;padding:2px 8px;font-size:.78rem;font-weight:700;cursor:pointer;float:right}
+  .mention-cad{font-size:.72rem;color:#666;margin:6px 0 0}
+  .panneau-cad #astuce-cad{padding:0 10px 6px;margin-top:0}
+  #astuce-cad{color:#0A5C6E;font-weight:600}
+  #astuce-cad:empty{display:none}
+</style>
+</head>
+<body>
+<div id="zone-ecran">
+<header id="bandeau">
+  <div class="ligne-bandeau">
+    <h1>🌲 Risque de feu par peuplement <span class="badge badge-secondaire">TERRES PRIVÉES · SAGUENAY–LAC-SAINT-JEAN</span> <span class="badge">🔒 ŒUVRE PROTÉGÉE — © 2026</span></h1>
+    <button type="button" id="bascule-bandeau" aria-label="Réduire ou déployer le bandeau">−</button>
+  </div>
+  <p>Terres privées de la région du Saguenay–Lac-Saint-Jean — prédisposition permanente des peuplements, <b>sans tenir compte de la météo</b>. Zoome sur un secteur (zoom 10 et +) puis touche un peuplement pour voir sa fiche complète.</p>
+</header>
+<script>
+  // Préférence du bandeau (réduit/déployé) retenue sur cet appareil :
+  // appliquée dès le chargement, donc aussi sur l'écran d'accès protégé.
+  try {
+    if(localStorage.getItem('risquefeu.bandeau.v1') === 'reduit'){
+      document.getElementById('bandeau').classList.add('bandeau-reduit');
+      document.getElementById('bascule-bandeau').textContent = '+';
+    }
+  } catch(e){}
+</script>
+
+<div id="zone-protegee"></div>
+</div>
+
+<div id="zone-suite"></div>
+
+<section id="verrou">
+  <h2>🔒 Accès protégé</h2>
+  <p>Cette carte est <b>protégée par un code d'accès</b>. Les données sont <b>chiffrées</b> : entre le code fourni par Frédéric Waltzing pour les déverrouiller sur cet appareil. Sans le bon code, rien ne peut être affiché ni lu.</p>
+  <form id="form-code">
+    <input type="password" id="champ-code" placeholder="Code d'accès" autocomplete="current-password" aria-label="Code d'accès">
+    <button type="submit" id="bouton-deverrouiller">Déverrouiller</button>
+  </form>
+  <p id="avert-appareil">⚠️ Une fois déverrouillé, l'accès est retenu sur CET appareil seulement. N'entrez votre code que sur vos appareils personnels.</p>
+  <div id="bloc-question">
+    <p style="margin:0"><b>Vérification supplémentaire</b></p>
+    <p style="margin:6px 0 0">Inscris un pays que vous avez visité ensemble :</p>
+    <form id="form-reponse">
+      <input type="text" id="champ-reponse" placeholder="Ta réponse" autocomplete="off" aria-label="Réponse à la question de sécurité">
+      <button type="submit" id="bouton-reponse">Valider</button>
+    </form>
+  </div>
+  <p id="err-code"></p>
+  <p id="msg-verrou"></p>
+</section>
+
+<section id="maintenance" style="display:none">
+  <h2>🛠️ Plateforme en maintenance</h2>
+  <p>La plateforme est <b>présentement en maintenance</b>. Merci de revenir plus tard.</p>
+</section>
+
+<section id="section-protection">
+  <h2>🔒 Protection et droits d'auteur</h2>
+  <p><b>© 2026 Frédéric Waltzing. Tous droits réservés.</b></p>
+  <p>Sont protégés par la <i>Loi sur le droit d'auteur</i> (Canada) : la <b>méthode de calcul</b> et ses pondérations, les <b>scores et classes de risque</b> attribués à chaque peuplement, le <b>choix et l'arrangement des données</b>, les <b>couleurs et la présentation cartographique</b>, les textes et le code de ce site. La protection s'applique automatiquement dès la création de l'œuvre ; la présente mention vaut avis public de titularité.</p>
+  <p><b>Interdictions :</b> sans autorisation écrite préalable de Frédéric Waltzing, il est interdit de reproduire ou republier cette carte en tout ou en partie, d'en extraire systématiquement les données ou les scores (y compris par moissonnage automatisé), de les revendre ou de les intégrer à un produit ou service tiers.</p>
+  <p><b>Exception :</b> les données écoforestières brutes du MRNF demeurent la propriété de leurs détenteurs et sont diffusées sous licence ouverte (Données Québec) ; la protection ci-dessus ne vise que l'œuvre originale de Frédéric Waltzing construite à partir de ces données.</p>
+  <p>Première publication : <b>10 novembre 2026</b>. Preuves d'antériorité conservées (dépôts horodatés). Demande d'autorisation : <b>fredericwaltzing@gmail.com</b>.</p>
+</section>
+<footer id="pied-page">
+  © 2026 Frédéric Waltzing — Tous droits réservés · Toute reproduction interdite sans autorisation écrite · Carte et méthode © 2026 Frédéric Waltzing · Données écoforestières © MRNF (licence ouverte — Données Québec) · Fonds de carte © contributeurs OpenStreetMap et Esri
+</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ===== Verrou chiffré — vérification CÔTÉ SERVEUR (modèle Escapade) =====
+  // Les données sont chiffrées en AES-256-GCM par une clé maîtresse.
+  // Le code (et, pour les associés, la réponse à la question de sécurité)
+  // est envoyé au serveur de vérification « verrou-feu » (Cloudflare Worker),
+  // qui contrôle ses empreintes et, si tout est valide, émet la clé
+  // maîtresse. Le téléphone déchiffre alors les données localement.
+  // Aucun code ni réponse n'est conservé ; seule la clé maîtresse reçue
+  // peut être retenue sur l'appareil (localStorage) pour éviter de les retaper.
+  const CLE_STOCKAGE = 'risquefeu.cle.v1';
+  const COULEURS = {'Très élevé':'#c1272d','Élevé':'#ef7d1a','Modéré':'#e9c46a','Faible':'#43a35a','Non boisé':'#cfcfcf'};
+  const ZOOM_DETAIL = 10;
+  let cleDonnees = null;   // CryptoKey AES-GCM des données
+  let INDEX = null;
+
+  const $ = id => document.getElementById(id);
+  const deb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const enb64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+  let codeEnAttente = null; // code saisi, gardé en mémoire de la page seulement (accès associés, 2e facteur)
+  const URL_VERROU = 'https://verrou-feu.fredwalt.workers.dev/deverrouiller';
+  const URL_BASE_VERROU = 'https://verrou-feu.fredwalt.workers.dev';
+
+  // Demande la clé maîtresse au serveur de vérification.
+  // Retourne {cle} si le serveur valide, {question:true} si le code exige la
+  // réponse à la question de sécurité (associés), {} si le serveur refuse.
+  async function demanderCle(code, reponse){
+    const corps = {code};
+    if(reponse !== undefined) corps.reponse = reponse;
+    const r = await fetch(URL_VERROU, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(corps)
+    });
+    let d = null;
+    try { d = await r.json(); } catch(err){ /* réponse non JSON */ }
+    if(r.ok && d && d.ok && d.maintenance) return {maintenance: true};
+    if(r.ok && d && d.ok && d.cle) return {cle: d.cle, role: d.role || null};
+    if(d && d.question) return {question: true};
+    return {};
+  }
+
+  /* __LOGIQUE_LOT__ */
+  // ===== Fiche détaillée de lot et taux de prime — logique pure =====
+  // (extraite et testée hors navigateur). Ces nouveautés sont des TESTS
+  // réservés au propriétaire : elles ne sont rendues que si le rôle de la
+  // session est proprietaire ou proprietaire-simple. Pour le rôle associes
+  // — ou si le rôle est inconnu (accès retenu sur l'appareil d'avant cette
+  // fonction, aucun rôle stocké) — rien de tout cela n'apparaît dans
+  // l'interface. Le rôle vient de la réponse du serveur de vérification et
+  // est retenu sur l'appareil avec la clé (localStorage).
+  const CLE_ROLE = 'risquefeu.role.v1';
+  let roleSession = null;
+  function roleEstProprietaire(role){
+    return role === 'proprietaire' || role === 'proprietaire-simple';
+  }
+
+  // Superficie sphérique approximative d'une géométrie GeoJSON (en hectares)
+  function aireAnneauHa(coords){
+    const R = 6378137, rad = Math.PI / 180;
+    let total = 0;
+    for(let i = 0; i < coords.length - 1; i++){
+      const p1 = coords[i], p2 = coords[i + 1];
+      total += (p2[0] - p1[0]) * rad * (2 + Math.sin(p1[1] * rad) + Math.sin(p2[1] * rad));
+    }
+    return total * R * R / 2 / 10000;
+  }
+  function aireGeodesiqueHa(geom){
+    if(!geom) return 0;
+    const polys = geom.type === 'Polygon' ? [geom.coordinates]
+      : geom.type === 'MultiPolygon' ? geom.coordinates : [];
+    let total = 0;
+    for(const poly of polys){
+      let a = Math.abs(aireAnneauHa(poly[0]));
+      for(let k = 1; k < poly.length; k++) a -= Math.abs(aireAnneauHa(poly[k]));
+      total += Math.max(a, 0);
+    }
+    return total;
+  }
+
+  // Boîte englobante [ouest, sud, est, nord] d'une géométrie GeoJSON
+  function limitesGeom(geom){
+    let o = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    (function visite(c){
+      if(typeof c[0] === 'number'){
+        if(c[0] < o) o = c[0];
+        if(c[0] > e) e = c[0];
+        if(c[1] < s) s = c[1];
+        if(c[1] > n) n = c[1];
+      } else for(const x of c) visite(x);
+    })(geom.coordinates);
+    return [o, s, e, n];
+  }
+
+  // Nombre formaté en français : 1 234,5
+  function fmtNombre(x, dec){
+    const parties = Number(x).toFixed(dec === undefined ? 2 : dec).split('.');
+    parties[0] = parties[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return parties.join(',');
+  }
+
+  // ===== Taux de prime ($/ha/an), réglables dans la légende =====
+  const CLE_TAUX = 'risquefeu.taux.v1';
+  const TAUX_DEFAUT = {'Très élevé':50, 'Élevé':30, 'Modéré':15, 'Faible':5, 'Non boisé':0};
+  function tauxActuels(){
+    const t = Object.assign({}, TAUX_DEFAUT);
+    try {
+      const brut = localStorage.getItem(CLE_TAUX);
+      if(brut){
+        const lu = JSON.parse(brut);
+        for(const c of Object.keys(TAUX_DEFAUT)){
+          const v = parseFloat(lu[c]);
+          if(isFinite(v) && v >= 0) t[c] = v;
+        }
+      }
+    } catch(e){ /* stockage indisponible : taux par défaut */ }
+    return t;
+  }
+  function enregistrerTaux(t){
+    try { localStorage.setItem(CLE_TAUX, JSON.stringify(t)); } catch(e){}
+  }
+
+  // HTML de la légende : les champs de taux n'existent que pour le propriétaire.
+  function construireLegendeHtml(role, taux){
+    const lignes = Object.keys(COULEURS).map(c => {
+      let ligne = `<i style="background:${COULEURS[c]}"></i>${c}`;
+      if(roleEstProprietaire(role)){
+        ligne += ` <span class="taux-lot"><input type="number" class="taux" data-classe="${c}" min="0" step="1" value="${taux[c]}" aria-label="Taux de prime, classe ${c}"> $/ha/an</span>`;
+      }
+      return ligne;
+    }).join('<br>');
+    let html = '<b>Prédisposition au feu</b><br>' + lignes;
+    if(roleEstProprietaire(role)) html += '<br><span class="note-taux">taux de prime — à ajuster</span>';
+    return html;
+  }
+
+  // Conversion GeoJSON <-> format de la bibliothèque d'intersection
+  // (polygon-clipping : MultiPolygon = liste de polygones d'anneaux [lng, lat]).
+  function geomVersPolygones(geom){
+    if(!geom) return [];
+    if(geom.type === 'Polygon') return [geom.coordinates];
+    if(geom.type === 'MultiPolygon') return geom.coordinates;
+    return [];
+  }
+
+  // Croisement lot × peuplements : superficies par classe DANS le lot.
+  // geomsLot : géométries GeoJSON du lot (service du cadastre) ;
+  // peuplements : entités GeoJSON des cellules de détail (propriétés c, s).
+  // Intersections planaires (degrés) ; superficies mesurées par l'aire
+  // sphérique ci-dessus, comme partout ailleurs sur le site.
+  function croiserLot(geomsLot, peuplements){
+    const classes = Object.keys(COULEURS);
+    const parClasseHa = {};
+    for(const c of classes) parClasseHa[c] = 0;
+    let lotHa = 0;
+    const lotsPC = [];
+    let bo = Infinity, bs = Infinity, be = -Infinity, bn = -Infinity;
+    for(const g of geomsLot){
+      lotHa += aireGeodesiqueHa(g);
+      lotsPC.push(geomVersPolygones(g));
+      const b = limitesGeom(g);
+      if(b[0] < bo) bo = b[0];
+      if(b[1] < bs) bs = b[1];
+      if(b[2] > be) be = b[2];
+      if(b[3] > bn) bn = b[3];
+    }
+    let scoreNum = 0, scoreDen = 0, nbTouches = 0, nbEchecs = 0;
+    // Surfaces PONDÉRÉES par groupe d'essences (valeur du bois) :
+    // chaque morceau de peuplement compte pour superficie × facteur
+    // densité × facteur âge dans son groupe de prix.
+    const parGroupePondHa = {};
+    for(const f of peuplements){
+      const g = f.geometry;
+      if(!g || !f.properties || !(f.properties.c in parClasseHa)) continue;
+      const b = limitesGeom(g);
+      if(b[0] >= be || b[2] <= bo || b[1] >= bn || b[3] <= bs) continue;
+      let morceau = null;
+      try {
+        const pc = geomVersPolygones(g);
+        if(!pc.length) continue;
+        const morceaux = [];
+        for(const pcLot of lotsPC){
+          if(!pcLot.length) continue;
+          const inter = polygonClipping.intersection(pc, pcLot);
+          for(const poly of inter) morceaux.push(poly);
+        }
+        if(morceaux.length) morceau = {type:'MultiPolygon', coordinates: morceaux};
+      } catch(e){ nbEchecs++; continue; }
+      if(!morceau) continue;
+      const a = aireGeodesiqueHa(morceau);
+      if(a <= 0) continue;
+      parClasseHa[f.properties.c] += a;
+      const gv = groupeValeur(f.properties.dom);
+      if(gv) parGroupePondHa[gv] = (parGroupePondHa[gv] || 0) +
+        a * facteurDensite(f.properties.den) * facteurAge(f.properties.age);
+      nbTouches++;
+      const s = f.properties.s;
+      if(typeof s === 'number'){ scoreNum += a * s; scoreDen += a; }
+    }
+    let couvertHa = 0;
+    for(const c of classes) couvertHa += parClasseHa[c];
+    let boiseHa = 0;
+    for(const c of classes) if(c !== 'Non boisé') boiseHa += parClasseHa[c];
+    return {
+      lotHa, couvertHa, boiseHa, parClasseHa, parGroupePondHa,
+      pctBoise: lotHa > 0 ? 100 * boiseHa / lotHa : 0,
+      scorePondere: scoreDen > 0 ? scoreNum / scoreDen : null,
+      nbTouches, nbEchecs
+    };
+  }
+
+  // ===== Franchise et prime : la franchise de 1 000 $ est la référence
+  // (prime de base) ; choisir 500 $ AJOUTE un pourcentage à la prime
+  // (moins de franchise = plus de couverture = prime plus haute). Le
+  // pourcentage d'ajout est un réglage du propriétaire, persisté sur
+  // l'appareil (défaut 10 %), comme le choix de franchise. =====
+  const CLE_FRANCHISE = 'risquefeu.franchise.v1';
+  const FRANCHISE_DEFAUT = {ajout: 10, choix: '1000'};
+  function franchiseActuelle(){
+    const f = Object.assign({}, FRANCHISE_DEFAUT);
+    try {
+      const brut = localStorage.getItem(CLE_FRANCHISE);
+      if(brut){
+        const lu = JSON.parse(brut);
+        const a = parseFloat(lu.ajout);
+        if(isFinite(a) && a >= 0) f.ajout = a;
+        if(lu.choix === '500' || lu.choix === '1000') f.choix = lu.choix;
+      }
+    } catch(e){ /* stockage indisponible : valeurs par défaut */ }
+    return f;
+  }
+  function enregistrerFranchise(f){
+    try { localStorage.setItem(CLE_FRANCHISE, JSON.stringify(f)); } catch(e){}
+  }
+  // Prime selon la franchise : retourne la prime de base (1 000 $) et la
+  // prime finale (majorée si la franchise de 500 $ est choisie).
+  function calculerPrimeFranchise(primeBase, franchise){
+    if(!franchise || franchise.choix !== '500'){
+      return {base: primeBase, finale: primeBase, majoration: false};
+    }
+    return {base: primeBase, finale: primeBase * (1 + franchise.ajout / 100), majoration: true};
+  }
+  function fmtAjout(x){
+    return String(Math.round(x * 10) / 10).replace('.', ',');
+  }
+
+  // ===== Majorations « distances incendie » =====
+  // Réglages du propriétaire, persistés sur l'appareil (défaut 0 %) :
+  // la prime est majorée de (km caserne ENTAMÉS × % caserne) + (bonds
+  // SOPFEU × % SOPFEU) — la caserne compte au kilomètre entamé, la
+  // SOPFEU par tranche de 5 km entamée (un bond), entre le lot et la
+  // station la plus proche (unités différentes, demande du
+  // propriétaire, 2026-11-11). Les mêmes valeurs sont poussées au
+  // serveur (envoyerTauxServeur) pour la prime calculée aux clients.
+  const CLE_MAJO = 'risquefeu.majo.v1';
+  const MAJO_DEFAUT = {caserne: 0, sopfeu: 0};
+  function majoActuelle(){
+    const m = Object.assign({}, MAJO_DEFAUT);
+    try {
+      const brut = localStorage.getItem(CLE_MAJO);
+      if(brut){
+        const lu = JSON.parse(brut);
+        const c = parseFloat(lu.caserne);
+        if(isFinite(c) && c >= 0 && c <= 100) m.caserne = c;
+        const s = parseFloat(lu.sopfeu);
+        if(isFinite(s) && s >= 0 && s <= 100) m.sopfeu = s;
+      }
+    } catch(e){ /* stockage indisponible : valeurs par défaut */ }
+    return m;
+  }
+  function enregistrerMajo(m){
+    try { localStorage.setItem(CLE_MAJO, JSON.stringify(m)); } catch(e){}
+  }
+  function bonds5(km){ return Math.ceil(km / 5); }
+  function kmEntames(km){ return Math.ceil(km); }
+  function facteurMajorationDistances(kmC, kmS, majo){
+    return 1 + kmEntames(kmC) * majo.caserne / 100 + bonds5(kmS) * majo.sopfeu / 100;
+  }
+  // ===== Ouverture de dossier et coût minimum =====
+  // Réglages du propriétaire, persistés sur l'appareil (défaut 0 $) :
+  // le coût minimum s'applique à la prime calculée (plancher), PUIS
+  // l'ouverture de dossier s'ajoute — jamais absorbée par le plancher.
+  // Exemple de Frédéric : prime calculée 45 $, minimum 55 $, ouverture
+  // 50 $ → total 105 $. Mêmes valeurs côté serveur (poussées par
+  // envoyerTauxServeur) pour la prime des clients.
+  const CLE_FRAIS = 'risquefeu.frais.v1';
+  const FRAIS_DEFAUT = {ouverture: 0, minimum: 0};
+  function fraisActuels(){
+    const f = Object.assign({}, FRAIS_DEFAUT);
+    try {
+      const brut = localStorage.getItem(CLE_FRAIS);
+      if(brut){
+        const lu = JSON.parse(brut);
+        const o = parseFloat(lu.ouverture);
+        if(isFinite(o) && o >= 0) f.ouverture = o;
+        const m = parseFloat(lu.minimum);
+        if(isFinite(m) && m >= 0) f.minimum = m;
+      }
+    } catch(e){ /* stockage indisponible : valeurs par défaut */ }
+    return f;
+  }
+  function enregistrerFrais(f){
+    try { localStorage.setItem(CLE_FRAIS, JSON.stringify(f)); } catch(e){}
+  }
+  function appliquerFrais(primeCalculee, frais){
+    return Math.max(frais.minimum, primeCalculee) + frais.ouverture;
+  }
+
+  // ===== Valeur du bois et base de prime (2026-11-11) =====
+  // Modèle maison du propriétaire — construction documentée comme
+  // telle, PAS un cubage : pour chaque peuplement d'un lot, surface
+  // pondérée = superficie (ha) × facteur densité × facteur âge ;
+  // valeur du lot = Σ, par groupe d'essences dominantes, de la
+  // surface pondérée × prix de référence du groupe ($/ha pour un
+  // peuplement mature et dense). Les prix sont des réglages du
+  // propriétaire (légende, section repliable « Valeur du bois »),
+  // persistés sur l'appareil (risquefeu.valeur.v1) et poussés au
+  // serveur comme les taux (envoyerTauxServeur) pour que la prime
+  // client utilise exactement les mêmes réglages.
+  // Base de prime : « classe » (défaut — grille $/ha par classe de
+  // risque, comportement historique INCHANGÉ) ou « valeur » : la
+  // prime de base devient valeur × pct % ; franchise, majorations
+  // distances, ouverture de dossier et coût minimum s'appliquent
+  // ensuite, exactement comme avant, des deux côtés (page et
+  // serveur — cohérence prouvée par les bancs).
+  // Facteurs DENSITÉ (cl_dens) : A=1,00 · B=0,78 · C=0,56 · D=0,36 ;
+  // densité absente ou illisible → facteur NEUTRE 0,68 (moyenne des
+  // quatre classes, arrondie). Facteurs ÂGE (cl_age) : 10 ans=0,15 ·
+  // 30=0,45 · 50=0,75 · 70=1,00 · 90=1,05 · 120 et +=1,00 · vieux
+  // irréguliers/inéquiennes (VIN, VIR)=1,00 · jeunes (JIN, JIR)=0,50 ;
+  // peuplement étagé (code composé) : la première classe (étage
+  // dominant) décide ; âge absent sur un peuplement boisé → facteur
+  // NEUTRE 0,75 (classe médiane). Peuplement sans essence dominante
+  // (non boisé, régénération, coupe) : exclu — facteur nul.
+  const CLE_VALEUR = 'risquefeu.valeur.v1';
+  const GROUPES_VALEUR = ['épinette noire', 'épinette blanche', 'sapin baumier', 'pin gris', 'résineux', 'mélèze', 'peuplier faux-tremble', 'bouleau blanc', 'feuillu', 'érable à sucre', 'érable rouge', 'Autre'];
+  // PRIX SOURCÉS 2026 (décision du propriétaire « Go 2026 »,
+  // 2026-11-11). Construction maison TRANSPARENTE : prix $/ha
+  // (peuplement mature et dense) = prix source ($/m³ solide) ×
+  // volume de référence du groupe (m³/ha, peuplement mature dense —
+  // ordres de grandeur des volumes marchands bruts de peuplements
+  // matures au Québec ; hypothèses, pas des mesurages).
+  // Sources : Syndicat des producteurs de bois du Saguenay–
+  // Lac-Saint-Jean, « LISTE DE PRIX — PRIX PROVISOIRES 2026 »
+  // (spbsaglac.qc.ca) — sciage tronçonné épinette-sapin-pin gris
+  // 63,00 $/m³, mélèze 55,00 $/m³, panneau tremble 8 pi 35,00 $/tmv ;
+  // tremble converti par 1 tmv = 1,11 m³ solide (AFPQ 03, Directives
+  // administratives, avril 2023, tableau 7, peuplier faux-tremble)
+  // → 31,53 $/m³. Détail : épinette noire 63×180=11 340 ·
+  // épinette blanche 63×230=14 490 · sapin baumier 63×200=12 600 ·
+  // pin gris 63×170=10 710 · résineux 63×190=11 970 ·
+  // mélèze 55×180=9 900 · peuplier faux-tremble 31,53×200=6 306.
+  // AUCUN prix régional publié pour bouleau blanc, feuillu, érable
+  // à sucre, érable rouge et « Autre » → 0 $/ha, NON COMPTÉS (voir
+  // GROUPES_SANS_PRIX_PUBLIE). POINT UNIQUE côté page (miroir des
+  // défauts du Worker).
+  const PRIX_VALEUR_DEFAUT = {'épinette noire':11340, 'épinette blanche':14490, 'sapin baumier':12600, 'pin gris':10710, 'résineux':11970, 'mélèze':9900, 'peuplier faux-tremble':6306, 'bouleau blanc':0, 'feuillu':0, 'érable à sucre':0, 'érable rouge':0, 'Autre':0};
+  // Migration : le tableau de TEST de la première passe, s'il a été
+  // stocké tel quel sur cet appareil, est ramené aux prix 2026.
+  const ANCIENS_PRIX_TEST = {'épinette noire':4000, 'épinette blanche':4500, 'sapin baumier':3500, 'pin gris':3000, 'résineux':3500, 'mélèze':2500, 'peuplier faux-tremble':1500, 'bouleau blanc':2000, 'feuillu':3000, 'érable à sucre':6000, 'érable rouge':4000, 'Autre':2000};
+  // Groupes sans aucun prix régional publié : à 0 $/ha, la fiche
+  // propriétaire affiche « aucun prix régional publié — non
+  // compté » au lieu d'un sous-total (aucun prix inventé).
+  const GROUPES_SANS_PRIX_PUBLIE = ['bouleau blanc', 'feuillu', 'érable à sucre', 'érable rouge', 'Autre'];
+  const VALEUR_DEFAUT = {prix: PRIX_VALEUR_DEFAUT, pct: 2, base: 'classe'};
+  function valeurActuelle(){
+    const v = {prix: Object.assign({}, PRIX_VALEUR_DEFAUT), pct: VALEUR_DEFAUT.pct, base: 'classe'};
+    try {
+      const brut = localStorage.getItem(CLE_VALEUR);
+      if(brut){
+        const lu = JSON.parse(brut);
+        if(lu && typeof lu === 'object'){
+          if(lu.prix && typeof lu.prix === 'object'){
+            // Migration : anciens prix de TEST recopiés à
+            // l'identique → on garde les prix sourcés 2026.
+            const copieTest = GROUPES_VALEUR.every(g => parseFloat(lu.prix[g]) === ANCIENS_PRIX_TEST[g]);
+            if(!copieTest){
+              for(const g of GROUPES_VALEUR){
+                const x = parseFloat(lu.prix[g]);
+                if(isFinite(x) && x >= 0 && x <= 10000000) v.prix[g] = x;
+              }
+            }
+          }
+          const p = parseFloat(lu.pct);
+          if(isFinite(p) && p >= 0 && p <= 100) v.pct = p;
+          if(lu.base === 'valeur') v.base = 'valeur';
+        }
+      }
+    } catch(e){ /* stockage indisponible : valeurs par défaut */ }
+    return v;
+  }
+  function enregistrerValeur(v){
+    try { localStorage.setItem(CLE_VALEUR, JSON.stringify(v)); } catch(e){}
+  }
+  function facteurDensite(den){
+    const d = {'A':1.00, 'B':0.78, 'C':0.56, 'D':0.36}[String(den || '').trim().toUpperCase()];
+    return (typeof d === 'number') ? d : 0.68;
+  }
+  function facteurAge(age){
+    if(age === null || age === undefined || String(age).trim() === '') return 0.75;
+    const s = String(age).trim().toUpperCase();
+    const table = {'10':0.15, '30':0.45, '50':0.75, '70':1.00, '90':1.05, '120':1.00};
+    if(s === 'VIN' || s === 'VIR') return 1.00;
+    if(s === 'JIN' || s === 'JIR') return 0.50;
+    if(typeof table[s] === 'number') return table[s];
+    // Peuplement étagé (code composé) : la première classe décide.
+    if(s.startsWith('VIN') || s.startsWith('VIR')) return 1.00;
+    if(s.startsWith('JIN') || s.startsWith('JIR')) return 0.50;
+    for(const prefixe of ['120', '90', '70', '50', '30', '10']){
+      if(s.startsWith(prefixe)) return table[prefixe];
+    }
+    if(/^\d+$/.test(s) && parseInt(s, 10) >= 120) return 1.00;
+    return 0.75;
+  }
+  // Groupe de prix d'un peuplement : le nom français de son essence
+  // dominante (mêmes groupes que les résumés clients) ; tout code
+  // sans nom français → « Autre » ; pas d'essence dominante → null
+  // (non boisé : exclu de la valeur).
+  function groupeValeur(dom){
+    if(!dom) return null;
+    return GROUPES_VALEUR.includes(dom) ? dom : 'Autre';
+  }
+  // Valeur estimée ($) à partir des surfaces pondérées par groupe.
+  function calculerValeur(parGroupePondHa, prix){
+    let total = 0;
+    if(parGroupePondHa){
+      for(const g of GROUPES_VALEUR){
+        const ha = parGroupePondHa[g];
+        if(typeof ha === 'number' && ha > 0) total += ha * (prix[g] || 0);
+      }
+    }
+    return total;
+  }
+  // Détail par groupe pour les fiches propriétaire : lignes de
+  // tableau (groupe, ha pondérés, prix $/ha, sous-total $) + total.
+  function lignesValeurHtml(parGroupePondHa, prix){
+    let total = 0;
+    const lignes = [];
+    for(const g of GROUPES_VALEUR){
+      const ha = (parGroupePondHa || {})[g] || 0;
+      if(!(ha > 0.0001)) continue;
+      // Groupe sans prix régional publié, laissé à 0 $/ha : la
+      // ligne le dit honnêtement au lieu d'afficher un sous-total
+      // de 0 $ — la surface pondérée reste montrée, non comptée.
+      // (Si le propriétaire saisit lui-même un prix > 0, la ligne
+      // redevient un sous-total normal.)
+      if(GROUPES_SANS_PRIX_PUBLIE.includes(g) && !(prix[g] > 0)){
+        lignes.push('<tr><td>' + g + '</td><td>' + fmtNombre(ha, 2) + '</td>' +
+          '<td colspan="2">aucun prix régional publié — non compté</td></tr>');
+        continue;
+      }
+      const sous = ha * (prix[g] || 0);
+      total += sous;
+      lignes.push('<tr><td>' + g + '</td><td>' + fmtNombre(ha, 2) + '</td><td>' +
+        fmtNombre(prix[g] || 0, 0) + '</td><td>' + fmtNombre(sous, 0) + '</td></tr>');
+    }
+    return {lignes: lignes.join(''), total};
+  }
+  const ENTETE_TABLE_VALEUR = '<table class="prime"><tr><th>Groupe d\u2019essences</th><th>ha pondérés</th><th>$/ha</th><th>$</th></tr>';
+
+  // Distances incendie d'un lot, demandées au serveur (route /prime) :
+  // seule la partie « distances » de la réponse sert ici (les primes de
+  // la réponse sont ignorées) — affichage de la fiche propriétaire et sa
+  // majoration locale, avec les mêmes % que ceux poussés au serveur.
+  async function demanderDistancesLot(numero){
+    try {
+      const r = await fetch(URL_BASE_VERROU + '/prime', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({numero})
+      });
+      if(!r.ok) return null;
+      const d = await r.json();
+      if(d && isFinite(Number(d.distCaserne)) && isFinite(Number(d.distSopfeu))){
+        return {kmC: Number(d.distCaserne), caserne: d.caserne || '',
+                kmS: Number(d.distSopfeu), baseSopfeu: d.baseSopfeu || ''};
+      }
+    } catch(e){ /* repli silencieux : fiche sans distances */ }
+    return null;
+  }
+
+  // HTML de la fiche détaillée d'un lot (propriétaire seulement).
+  // Sans 3e argument (franchise), le rendu est exactement celui d'origine.
+  function htmlFicheLotDetaillee(calc, taux, franchise, dist){
+    // Base de prime : « classe » (défaut) = Σ taux × ha par classe ;
+    // « valeur » = valeur estimée du bois × pct % — le tableau montre
+    // alors le détail par groupe d'essences au lieu des classes.
+    const val = valeurActuelle();
+    const modeValeur = val.base === 'valeur';
+    const detValeur = lignesValeurHtml(calc.parGroupePondHa, val.prix);
+    let prime = 0;
+    const lignesClasses = Object.keys(COULEURS).map(c => {
+      const ha = calc.parClasseHa[c] || 0;
+      const sous = ha * (taux[c] || 0);
+      prime += sous;
+      const pct = calc.couvertHa > 0 ? 100 * ha / calc.couvertHa : 0;
+      return '<tr><td><span class="pastille" style="background:' + COULEURS[c] + '"></span>' + c + '</td>' +
+        '<td>' + fmtNombre(ha, 2) + '</td><td>' + fmtNombre(pct, 1) + '</td>' +
+        '<td>' + fmtNombre(taux[c] || 0, 0) + '</td><td>' + fmtNombre(sous, 0) + '</td></tr>';
+    }).join('');
+    const lignes = modeValeur ? detValeur.lignes : lignesClasses;
+    if(modeValeur) prime = detValeur.total * val.pct / 100;
+    const enteteTable = modeValeur ? ENTETE_TABLE_VALEUR :
+      '<table class="prime"><tr><th>Classe</th><th>ha</th><th>% du couvert</th><th>$/ha/an</th><th>$ / an</th></tr>';
+    let html = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
+      'Lot <b>' + calc.numero + '</b><br>' +
+      'Superficie du lot : <b>' + fmtNombre(calc.lotHa, 2) + ' ha</b><br>' +
+      'Couverte par nos peuplements : <b>' + fmtNombre(calc.couvertHa, 2) + ' ha</b>' +
+      (calc.lotHa > 0 ? ' (' + fmtNombre(100 * calc.couvertHa / calc.lotHa, 1) + ' %)' : '') + '<br>' +
+      'Boisé : <b>' + fmtNombre(calc.pctBoise, 1) + ' %</b> · Score moyen pondéré : <b>' +
+      (calc.scorePondere === null ? '—' : fmtNombre(calc.scorePondere, 1) + ' / 100') + '</b>';
+    // Distances incendie (si le serveur les a fournies) : lignes
+    // d'information + prime majorée selon les % distances du propriétaire.
+    let primeMajoree = prime;
+    if(dist && isFinite(dist.kmC) && isFinite(dist.kmS)){
+      const majo = majoActuelle();
+      const facteur = facteurMajorationDistances(dist.kmC, dist.kmS, majo);
+      primeMajoree = prime * facteur;
+      html += '<br>Caserne la plus proche : <b>' + fmtNombre(dist.kmC, 1) + ' km</b>' +
+        (dist.caserne ? ' — ' + dist.caserne : '') +
+        '<br>Base SOPFEU la plus proche : <b>' + fmtNombre(dist.kmS, 1) + ' km</b>' +
+        (dist.baseSopfeu ? ' — ' + dist.baseSopfeu : '');
+      if(facteur > 1){
+        html += '<br><span style="color:#666">Majoration distances appliquée : +' +
+          fmtNombre((facteur - 1) * 100, 1) + ' % (caserne : ' + kmEntames(dist.kmC) + ' km entamé(s), ' +
+          'SOPFEU : ' + bonds5(dist.kmS) + ' bond(s))</span>';
+      }
+    }
+    // Règle interne du boisé minimum (même règle que côté client,
+    // appliquée au boisé affiché par CETTE fiche, arrondi à 2
+    // décimales) : sous le seuil, l'avis « Propriété non assurable »
+    // remplace toute la section prime — ni montant, ni choix de
+    // franchise. Le seuil n'apparaît dans aucun texte visible.
+    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3;
+    if(nonAssurable) html += '<p class="avis-non-assurable">Propriété non assurable</p>';
+    if(calc.couvertHa <= 0){
+      html += '<br><span style="color:#666">Aucun de nos peuplements ne couvre ce lot.</span>';
+    } else if(franchise){
+      const pf = calculerPrimeFranchise(primeMajoree, franchise);
+      const frais = fraisActuels();
+      const baseFrais = appliquerFrais(pf.base, frais);
+      const finaleFrais = appliquerFrais(pf.finale, frais);
+      html += enteteTable + lignes + '</table>';
+      if(!nonAssurable){
+        html += '<label>Franchise : <select id="choix-franchise">' +
+        '<option value="1000"' + (franchise.choix === '1000' ? ' selected' : '') + '>1 000 $</option>' +
+        '<option value="500"' + (franchise.choix === '500' ? ' selected' : '') + '>500 $</option>' +
+        '</select></label><br>';
+      if(pf.majoration){
+        html += 'Prime (franchise 1 000 $) : ' + fmtNombre(baseFrais, 0) + ' $/an<br>' +
+          '<span class="prime-totale">Prime (franchise 500 $, +' + fmtAjout(franchise.ajout) + ' %) : ' +
+          fmtNombre(finaleFrais, 0) + ' $/an</span>';
+      } else {
+        html += '<span class="prime-totale">Prime indicative : ' + fmtNombre(baseFrais, 0) + ' $/an</span>' +
+          ' <span style="color:#666">(franchise de 1 000 $)</span>';
+      }
+      if(frais.ouverture > 0 || frais.minimum > 0){
+        html += '<br><span style="color:#666">Ouverture de dossier : ' + fmtNombre(frais.ouverture, 0) +
+          ' $ incluse · Coût minimum : ' + fmtNombre(frais.minimum, 0) + ' $ (appliqué avant l\u2019ouverture)</span>';
+      }
+      }
+    } else {
+      html += enteteTable + lignes + '</table>';
+      if(!nonAssurable) html += '<span class="prime-totale">Prime indicative : ' + fmtNombre(appliquerFrais(primeMajoree, fraisActuels()), 0) + ' $/an</span>';
+    }
+    // Valeur estimée du bois : affichée avec le bloc prime, après le
+    // montant — le détail par groupe EST le tableau ci-dessus en base
+    // « valeur » ; il est ajouté ici en base « classe ». Jamais
+    // affichée si la propriété est non assurable.
+    if(!nonAssurable && calc.couvertHa > 0 && detValeur.total > 0){
+      if(!modeValeur) html += ENTETE_TABLE_VALEUR + detValeur.lignes + '</table>';
+      html += '<span class="valeur-ligne">Valeur estimée du bois : <b>≈ ' + fmtNombre(detValeur.total, 0) + ' $</b></span>';
+      if(modeValeur) html += '<br><span style="color:#666">Prime calculée à ' + fmtAjout(val.pct) + ' % de la valeur estimée.</span>';
+    }
+    if(calc.nbEchecs) html += '<br><span style="color:#666">(' + calc.nbEchecs + ' peuplement(s) ignoré(s) : géométrie illisible.)</span>';
+    html += '<p class="mention-cad">Superficies indicatives : nos peuplements et les limites cadastrales proviennent de sources différentes. Prime indicative calculée selon vos taux — ne constitue pas une offre d\u2019assurance.</p>';
+    return html;
+  }
+  // HTML de la fiche détaillée d'un DOSSIER de lots (propriétaire
+  // seulement, sélection multiple) : superficies FUSIONNÉES des
+  // croisements des lots (calc), détail par lot (prime exacte du lot
+  // et SES distances), puis composition EXACTEMENT comme la fiche d'un
+  // lot : chaque prime de lot est majorée de ses propres distances,
+  // les majorées sont additionnées, la franchise s'applique au total,
+  // puis appliquerFrais compose UNE fois (coût minimum, puis
+  // ouverture). À réglages égaux, le total égale donc celui de la
+  // route /prime en mode {numeros} (même règle des deux côtés).
+  function htmlFicheDossierDetaillee(calc, details, taux, franchise){
+    // Base de prime : « classe » (défaut) ou « valeur » — comme la
+    // fiche d'un lot ; en base « valeur », la prime exacte de chaque
+    // lot = SA valeur estimée × pct % (détail par lot plus bas).
+    const val = valeurActuelle();
+    const modeValeur = val.base === 'valeur';
+    const detValeur = lignesValeurHtml(calc.parGroupePondHa, val.prix);
+    let prime = 0;
+    const lignesClasses = Object.keys(COULEURS).map(c => {
+      const ha = calc.parClasseHa[c] || 0;
+      const sous = ha * (taux[c] || 0);
+      prime += sous;
+      const pct = calc.couvertHa > 0 ? 100 * ha / calc.couvertHa : 0;
+      return '<tr><td><span class="pastille" style="background:' + COULEURS[c] + '"></span>' + c + '</td>' +
+        '<td>' + fmtNombre(ha, 2) + '</td><td>' + fmtNombre(pct, 1) + '</td>' +
+        '<td>' + fmtNombre(taux[c] || 0, 0) + '</td><td>' + fmtNombre(sous, 0) + '</td></tr>';
+    }).join('');
+    const lignes = modeValeur ? detValeur.lignes : lignesClasses;
+    const enteteTable = modeValeur ? ENTETE_TABLE_VALEUR :
+      '<table class="prime"><tr><th>Classe</th><th>ha</th><th>% du couvert</th><th>$/ha/an</th><th>$ / an</th></tr>';
+    let html = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
+      'Dossier de <b>' + details.length + ' lots</b> : ' + details.map(d => d.numero).join(', ') + '<br>' +
+      'Superficie totale : <b>' + fmtNombre(calc.lotHa, 2) + ' ha</b><br>' +
+      'Couverte par nos peuplements : <b>' + fmtNombre(calc.couvertHa, 2) + ' ha</b>' +
+      (calc.lotHa > 0 ? ' (' + fmtNombre(100 * calc.couvertHa / calc.lotHa, 1) + ' %)' : '') + '<br>' +
+      'Boisé : <b>' + fmtNombre(calc.pctBoise, 1) + ' %</b> · Score moyen pondéré : <b>' +
+      (calc.scorePondere === null ? '—' : fmtNombre(calc.scorePondere, 1) + ' / 100') + '</b>';
+    // Détail par lot : prime exacte du lot, majorée de SES distances.
+    const majo = majoActuelle();
+    let primeMajoreeTotale = 0;
+    html += '<br><b>Détail par lot :</b>';
+    for(const d of details){
+      const detLot = lignesValeurHtml(d.parGroupePondHa, val.prix);
+      let exacteLot = 0;
+      if(modeValeur) exacteLot = detLot.total * val.pct / 100;
+      else for(const c of Object.keys(COULEURS)) exacteLot += (d.parClasseHa[c] || 0) * (taux[c] || 0);
+      let facteur = 1;
+      html += '<br>Lot <b>' + d.numero + '</b> — prime avant majoration : <b>' + fmtNombre(exacteLot, 0) + ' $</b>';
+      if(detLot.total > 0) html += '<br>Valeur estimée du bois de ce lot : <b>≈ ' + fmtNombre(detLot.total, 0) + ' $</b>';
+      if(d.dist && isFinite(d.dist.kmC) && isFinite(d.dist.kmS)){
+        facteur = facteurMajorationDistances(d.dist.kmC, d.dist.kmS, majo);
+        html += '<br>Caserne la plus proche : <b>' + fmtNombre(d.dist.kmC, 1) + ' km</b>' +
+          (d.dist.caserne ? ' — ' + d.dist.caserne : '') +
+          '<br>Base SOPFEU la plus proche : <b>' + fmtNombre(d.dist.kmS, 1) + ' km</b>' +
+          (d.dist.baseSopfeu ? ' — ' + d.dist.baseSopfeu : '');
+        if(facteur > 1){
+          html += '<br><span style="color:#666">Majoration distances de ce lot : +' +
+            fmtNombre((facteur - 1) * 100, 1) + ' % (caserne : ' + kmEntames(d.dist.kmC) + ' km entamé(s), ' +
+            'SOPFEU : ' + bonds5(d.dist.kmS) + ' bond(s))</span>';
+        }
+      }
+      primeMajoreeTotale += exacteLot * facteur;
+    }
+    // Règle interne du boisé minimum (même règle que côté client,
+    // appliquée au boisé affiché par CETTE fiche, arrondi à 2
+    // décimales) : sous le seuil, l'avis « Propriété non assurable »
+    // remplace toute la section prime — ni montant, ni choix de
+    // franchise. Le seuil n'apparaît dans aucun texte visible.
+    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3;
+    if(nonAssurable) html += '<p class="avis-non-assurable">Propriété non assurable</p>';
+    if(calc.couvertHa <= 0){
+      html += '<br><span style="color:#666">Aucun de nos peuplements ne couvre ces lots.</span>';
+    } else if(franchise){
+      const pf = calculerPrimeFranchise(primeMajoreeTotale, franchise);
+      const frais = fraisActuels();
+      const baseFrais = appliquerFrais(pf.base, frais);
+      const finaleFrais = appliquerFrais(pf.finale, frais);
+      html += enteteTable + lignes + '</table>';
+      if(!nonAssurable){
+        html += '<label>Franchise : <select id="choix-franchise">' +
+        '<option value="1000"' + (franchise.choix === '1000' ? ' selected' : '') + '>1 000 $</option>' +
+        '<option value="500"' + (franchise.choix === '500' ? ' selected' : '') + '>500 $</option>' +
+        '</select></label><br>';
+      if(pf.majoration){
+        html += 'Prime (franchise 1 000 $) : ' + fmtNombre(baseFrais, 0) + ' $/an<br>' +
+          '<span class="prime-totale">Prime (franchise 500 $, +' + fmtAjout(franchise.ajout) + ' %) : ' +
+          fmtNombre(finaleFrais, 0) + ' $/an</span>';
+      } else {
+        html += '<span class="prime-totale">Prime indicative : ' + fmtNombre(baseFrais, 0) + ' $/an</span>' +
+          ' <span style="color:#666">(franchise de 1 000 $)</span>';
+      }
+      if(frais.ouverture > 0 || frais.minimum > 0){
+        html += '<br><span style="color:#666">Ouverture de dossier : ' + fmtNombre(frais.ouverture, 0) +
+          ' $ incluse · Coût minimum : ' + fmtNombre(frais.minimum, 0) + ' $ (appliqué avant l\u2019ouverture)</span>';
+      }
+      }
+    } else {
+      html += enteteTable + lignes + '</table>';
+      if(!nonAssurable) html += '<span class="prime-totale">Prime indicative : ' + fmtNombre(appliquerFrais(primeMajoreeTotale, fraisActuels()), 0) + ' $/an</span>';
+    }
+    // Valeur estimée du bois du dossier : totale, après le montant de
+    // la prime (le détail par lot est dans les lignes « Détail par
+    // lot » ci-dessus). Jamais affichée si non assurable.
+    if(!nonAssurable && calc.couvertHa > 0 && detValeur.total > 0){
+      html += '<span class="valeur-ligne">Valeur estimée du bois (dossier) : <b>≈ ' + fmtNombre(detValeur.total, 0) + ' $</b></span>';
+      if(modeValeur) html += '<br><span style="color:#666">Prime calculée à ' + fmtAjout(val.pct) + ' % de la valeur estimée.</span>';
+    }
+    if(calc.nbEchecs) html += '<br><span style="color:#666">(' + calc.nbEchecs + ' peuplement(s) ignoré(s) : géométrie illisible.)</span>';
+    html += '<p class="mention-cad">Superficies indicatives : nos peuplements et les limites cadastrales proviennent de sources différentes. Prime indicative calculée selon vos taux — ne constitue pas une offre d\u2019assurance.</p>';
+    return html;
+  }
+  /* __FIN_LOGIQUE_LOT__ */
+
+  // ===== Synchronisation des taux vers le serveur (rôles propriétaires) =====
+  // La prime affichée aux clients est calculée par le Worker « verrou-feu »
+  // (route /prime) avec les taux COURANTS du propriétaire. À chaque réglage
+  // des taux de la légende ou du % d'ajout franchise — et une fois après un
+  // déverrouillage propriétaire réussi — la page envoie discrètement ces
+  // taux au serveur (POST /taux, authentifié par la clé maîtresse retenue
+  // sur l'appareil). Échec = silence : la fiche propriétaire continue de
+  // calculer localement, exactement comme avant.
+  const CLES_TAUX_SERVEUR = {'Très élevé':'tree', 'Élevé':'eleve', 'Modéré':'modere', 'Faible':'faible', 'Non boisé':'nonboise'};
+  let minuteurEnvoiTaux = null;
+  function envoyerTauxServeur(){
+    if(!roleEstProprietaire(roleSession)) return;
+    let cleStockee = null;
+    try { cleStockee = localStorage.getItem(CLE_STOCKAGE); } catch(e){}
+    if(!cleStockee) return;
+    const t = tauxActuels();
+    const taux = {};
+    for(const c of Object.keys(CLES_TAUX_SERVEUR)) taux[CLES_TAUX_SERVEUR[c]] = t[c];
+    const v = valeurActuelle();
+    fetch(URL_BASE_VERROU + '/taux', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cle: cleStockee, taux, ajout: franchiseActuelle().ajout,
+        majoCaserne: majoActuelle().caserne, majoSopfeu: majoActuelle().sopfeu,
+        ouverture: fraisActuels().ouverture, minimum: fraisActuels().minimum,
+        valeur: {prix: v.prix, pct: v.pct, base: v.base}})
+    }).catch(() => { /* repli silencieux */ });
+  }
+  function envoyerTauxServeurDiffere(){
+    clearTimeout(minuteurEnvoiTaux);
+    minuteurEnvoiTaux = setTimeout(envoyerTauxServeur, 800);
+  }
+
+  async function dechiffrerJson(nomFichier){
+    const r = await fetch('donnees/' + nomFichier + '.enc');
+    if(!r.ok) throw new Error('fichier chiffré introuvable : ' + nomFichier);
+    const buf = await r.arrayBuffer();
+    const clair = await crypto.subtle.decrypt(
+      {name:'AES-GCM', iv: new Uint8Array(buf.slice(0,12))}, cleDonnees, buf.slice(12));
+    return JSON.parse(new TextDecoder().decode(clair));
+  }
+
+  async function essayerCleBrute(brute){
+    cleDonnees = await crypto.subtle.importKey('raw', brute, 'AES-GCM', false, ['decrypt']);
+    INDEX = await dechiffrerJson('index.json');
+  }
+
+  function afficherErreur(msg){
+    const e = $('err-code');
+    e.textContent = msg;
+    e.style.display = 'block';
+  }
+
+  // Mode maintenance (accès associés, décision de Frédéric 2026-11-11) :
+  // le serveur accepte la connexion mais n'émet aucune clé — on efface tout
+  // accès mémorisé et on affiche l'écran « Plateforme en maintenance ».
+  function afficherMaintenance(){
+    try { localStorage.removeItem(CLE_STOCKAGE); localStorage.removeItem(CLE_ROLE); } catch(e){}
+    roleSession = null;
+    cleDonnees = null;
+    codeEnAttente = null;
+    $('verrou').style.display = 'none';
+    $('section-protection').style.display = 'none';
+    $('maintenance').style.display = 'block';
+  }
+
+  async function deverrouiller(brute, role){
+    if(role === 'client'){
+      // Espace client : la clé reçue est la clé CLIENTE — elle ne déchiffre
+      // QUE les résumés par lot (donnees-clients/). Aucun index, aucune
+      // donnée de peuplements n'est chargée ni demandée dans ce mode.
+      cleDonnees = await crypto.subtle.importKey('raw', brute, 'AES-GCM', false, ['decrypt']);
+      roleSession = 'client';
+      try {
+        localStorage.setItem(CLE_STOCKAGE, enb64(brute));
+        localStorage.setItem(CLE_ROLE, 'client');
+      } catch(err){}
+      codeEnAttente = null;
+      demarrerClient();
+      return;
+    }
+    await essayerCleBrute(brute);
+    roleSession = role || null;
+    try {
+      localStorage.setItem(CLE_STOCKAGE, enb64(brute));
+      if(roleSession) localStorage.setItem(CLE_ROLE, roleSession);
+      else localStorage.removeItem(CLE_ROLE);
+    } catch(err){}
+    codeEnAttente = null;
+    demarrer();
+  }
+
+  // Étape 1 : le code est vérifié par le serveur (accès propriétaire direct,
+  // ou accès associés → le serveur demande l'étape 2).
+  $('form-code').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const bouton = $('bouton-deverrouiller');
+    const code = $('champ-code').value.trim();
+    if(!code) return;
+    bouton.disabled = true;
+    $('err-code').style.display = 'none';
+    $('msg-verrou').textContent = 'Vérification du code…';
+    try {
+      const res = await demanderCle(code);
+      if(res.cle){ await deverrouiller(deb64(res.cle).buffer, res.role); return; }
+      if(res.maintenance){ afficherMaintenance(); return; }
+      if(res.question){
+        // Étape 2 requise : accès associés à deux facteurs (code + question de sécurité).
+        codeEnAttente = code;
+        $('bloc-question').style.display = 'block';
+        $('msg-verrou').textContent = 'Ce code demande une vérification supplémentaire : réponds à la question de sécurité.';
+        $('champ-reponse').focus();
+        return;
+      }
+      afficherErreur('Code incorrect. Vérifie et réessaie.');
+      $('msg-verrou').textContent = '';
+    } catch(err){
+      afficherErreur('Impossible de déverrouiller (problème de connexion ou données illisibles).');
+      $('msg-verrou').textContent = '';
+    } finally { bouton.disabled = false; }
+  });
+
+  // Étape 2 (associés) : le serveur revérifie le code + la réponse —
+  // sinon rien ne se déchiffre.
+  $('form-reponse').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if(codeEnAttente === null) return;
+    const bouton = $('bouton-reponse');
+    bouton.disabled = true;
+    $('err-code').style.display = 'none';
+    $('msg-verrou').textContent = 'Vérification de la réponse…';
+    try {
+      const res = await demanderCle(codeEnAttente, $('champ-reponse').value);
+      if(res.maintenance){ afficherMaintenance(); return; }
+      if(!res.cle){
+        afficherErreur('Code ou réponse incorrect. Vérifie et réessaie.');
+        $('msg-verrou').textContent = '';
+        return;
+      }
+      await deverrouiller(deb64(res.cle).buffer, res.role);
+    } catch(err){
+      afficherErreur('Impossible de déverrouiller (problème de connexion ou données illisibles).');
+      $('msg-verrou').textContent = '';
+    } finally { bouton.disabled = false; }
+  });
+
+  // Déverrouillage automatique si une clé est retenue sur cet appareil.
+  (async () => {
+    let stockee = null;
+    try { stockee = localStorage.getItem(CLE_STOCKAGE); } catch(err){}
+    if(!stockee) return;
+    $('msg-verrou').textContent = 'Accès mémorisé sur cet appareil : déverrouillage…';
+    try { roleSession = localStorage.getItem(CLE_ROLE); } catch(err){ roleSession = null; }
+    if(roleSession === 'associes'){
+      // Accès associés en maintenance : l'accès mémorisé sur l'appareil ne
+      // rouvre plus — afficherMaintenance() l'efface et montre l'écran prévu.
+      afficherMaintenance();
+      return;
+    }
+    try {
+      if(roleSession === 'client'){
+        // Session cliente retenue : on rouvre l'espace client directement
+        // (la clé stockée est la clé cliente, pas la clé maîtresse).
+        cleDonnees = await crypto.subtle.importKey('raw', deb64(stockee).buffer, 'AES-GCM', false, ['decrypt']);
+        demarrerClient();
+        return;
+      }
+      await essayerCleBrute(deb64(stockee).buffer);
+      demarrer();
+    } catch(err){
+      try { localStorage.removeItem(CLE_STOCKAGE); localStorage.removeItem(CLE_ROLE); } catch(e){}
+      roleSession = null;
+      cleDonnees = null; INDEX = null;
+      $('msg-verrou').textContent = '';
+    }
+  })();
+
+  // ===== Bandeau supérieur réductible =====
+  // Bouton − / + dans le bandeau : réduit, il ne reste qu'une ligne mince
+  // (titre + badge « Œuvre protégée ») et la carte grandit d'autant, sans
+  // rechargement. La préférence est retenue sur l'appareil (localStorage)
+  // et appliquée dès le chargement par le petit script sous le bandeau —
+  // elle vaut donc aussi sur l'écran d'accès protégé. Par défaut (aucune
+  // préférence stockée) : déployé, comme avant.
+  const CLE_BANDEAU = 'risquefeu.bandeau.v1';
+  let carteGlobale = null; // remplie par initCarte(), pour invalidateSize
+  function definirBandeau(reduit, memoriser){
+    const b = document.getElementById('bandeau');
+    b.classList.toggle('bandeau-reduit', reduit);
+    document.getElementById('bascule-bandeau').textContent = reduit ? '+' : '−';
+    if(memoriser){
+      try { localStorage.setItem(CLE_BANDEAU, reduit ? 'reduit' : 'deplie'); } catch(e){}
+    }
+    // La zone plein écran redistribue la hauteur : prévenir Leaflet après
+    // la redistribution pour qu'il recalcule la taille de la carte.
+    requestAnimationFrame(() => { if(carteGlobale) carteGlobale.invalidateSize(); });
+  }
+  document.getElementById('bascule-bandeau').addEventListener('click', () => {
+    definirBandeau(!document.getElementById('bandeau').classList.contains('bandeau-reduit'), true);
+  });
+
+  function verrouillerAppareil(){
+    try { localStorage.removeItem(CLE_STOCKAGE); localStorage.removeItem(CLE_ROLE); } catch(err){}
+    location.reload();
+  }
+
+  // ===== Protection des clics des panneaux (les deux espaces) =====
+  // Bug vécu (propriétaire, 2026-11-11) : « Quand je clique sur
+  // Retirer, ça sélectionne le lot du dessous. » La seule protection
+  // des colonnes était L.DomEvent.disableClickPropagation — or, dans
+  // Leaflet 1.9.4, cette fonction n'enregistre AUCUN écouteur sur
+  // l'événement 'click' lui-même (seulement mousedown, touchstart,
+  // dblclick et contextmenu, plus un drapeau interne) : un clic né
+  // dans la colonne pouvait atteindre le conteneur de la carte et y
+  // être converti en clic de carte aux coordonnées du pointeur — donc
+  // sélectionner/désélectionner le lot situé SOUS le panneau.
+  // Parade, dans le code de la page elle-même : des écouteurs NATIFS
+  // 'click' et 'dblclick' en stopPropagation sur chaque conteneur
+  // d'interface. L'événement meurt au conteneur, avant la carte, et
+  // la protection couvre tous les éléments présents ou ajoutés après
+  // coup à l'intérieur (listes de sélection reconstruites à chaque
+  // changement, boutons « Retirer » / « Tout effacer » / « Lancer la
+  // recherche », bascules −/+), sans toucher à leurs propres gestes.
+  function protegerClicsPanneau(el){
+    if(!el) return;
+    el.addEventListener('click', (e) => { e.stopPropagation(); });
+    el.addEventListener('dblclick', (e) => { e.stopPropagation(); });
+  }
+
+  // ===== Contenu protégé : construit seulement après déverrouillage =====
+  function demarrer(){
+    $('verrou').style.display = 'none';
+    // Retour défensif à l'affichage complet (si un affichage client avait
+    // été appliqué dans cette page) : sections sous la carte réaffichées.
+    document.body.classList.remove('mode-client');
+    const spDem = $('section-protection'); if(spDem) spDem.style.display = '';
+    const pfDem = $('pied-page'); if(pfDem) pfDem.style.display = '';
+    // Zone plein écran : bandeau + carte dans la hauteur de l'écran.
+    $('zone-ecran').classList.add('avec-carte');
+    $('zone-protegee').innerHTML = '<div id="zone-carte"><div id="map"></div></div>';
+    $('zone-suite').innerHTML =
+        '<div id="panneau">' +
+          '<h2>Fiche du peuplement</h2>' +
+          '<p id="fiche">👆 Zoome sur un secteur, puis touche un peuplement : tu verras sa classe de risque, son score et <b>pourquoi</b> il est classé ainsi.</p>' +
+          '<p id="etat">Chargement de l\'aperçu régional…</p>' +
+          '<button id="bouton-verrouiller" type="button">🔒 Verrouiller cet appareil</button>' +
+        '</div>' +
+      '<section>' +
+        '<h2>La région en chiffres — terres privées</h2>' +
+        '<div id="stats"></div>' +
+        '<p id="totaux"></p>' +
+        '<p>Note : le bloc de la Gestion forestière du Saint-Maurice, à l\'ouest de la région, est exclu de cette carte.</p>' +
+        '<h2>Comment le score est calculé</h2>' +
+        '<p>Chaque peuplement reçoit un score de <b>0 à 100</b> à partir des seules données écoforestières du MRNF : composition (résineux / mixte / feuillu et essence dominante), densité du couvert, âge, régénération, perturbations récentes (coupes, brûlis) et drainage du site. Plus le peuplement est résineux, dense, jeune et sec, plus son score monte.</p>' +
+        '<p class="avertissement"><b>⚠️ À lire :</b> c\'est un <b>indice relatif maison</b>, dont les <b>pondérations de première passe sont NON validées par l\'historique des feux</b>. Il décrit la <b>prédisposition du peuplement seulement</b> — il ne prédit ni un départ de feu, ni le danger du jour (ça, c\'est le rôle de l\'Indice Forêt-Météo — IFM — de la SOPFEU).</p>' +
+      '</section>';
+    $('bouton-verrouiller').addEventListener('click', verrouillerAppareil);
+
+    // Statistiques officielles de la région (terres privées), depuis l'index déchiffré
+    const s = INDEX.stats;
+    const fmt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    $('stats').innerHTML =
+      '<table class="stats"><tr><th>Classe</th><th>Peuplements</th><th>Superficie privée</th><th>Part</th></tr>' +
+      s.lignes.map(([c,n,ha,pct]) =>
+        `<tr><td><span class="pastille" style="background:${COULEURS[c]}"></span>${c}</td><td>${n}</td><td>${ha} ha</td><td>${String(pct).replace('.',',')} %</td></tr>`).join('') +
+      '</table>';
+    $('totaux').innerHTML =
+      `Superficie privée totale couverte par les peuplements : <b>${fmt(s.total_ha)} ha</b>, dont <b>${fmt(s.boise_ha)} ha boisés</b> (score moyen ${s.score_moyen} / 100).`;
+
+    initCarte();
+    // Propriétaire : pousser ses taux courants au serveur, pour que la
+    // prime des clients suive ses réglages (envoi discret, différé).
+    if(roleEstProprietaire(roleSession)) envoyerTauxServeurDiffere();
+  }
+
+  // ===== Espace client (rôle « client ») =====
+  // Le client ne voit QUE : les fonds de carte, la couche des lots du
+  // cadastre (service public en direct), la recherche/sélection de lot et
+  // la fiche de SON lot — calculée à partir de résumés PRÉCALCULÉS et
+  // chiffrés avec la clé cliente (donnees-clients/). Aucune donnée de
+  // peuplements n'est demandée ni chargée dans ce mode ; aucun score,
+  // aucune classe de risque ne s'y trouve. La prime indicative, elle, est
+  // calculée par le serveur (route /prime du verrou) à partir des taux
+  // courants du propriétaire : la page cliente ne reçoit que les deux
+  // montants finaux — jamais les taux, jamais les classes.
+  function demarrerClient(){
+    $('verrou').style.display = 'none';
+    $('zone-ecran').classList.add('avec-carte');
+    $('zone-protegee').innerHTML = '<div id="zone-carte"><div id="map"></div></div>';
+    // Écran client vraiment épuré : bandeau réduit à sa ligne mince EN
+    // PERMANENCE (la classe mode-client masque le bouton − / + du bandeau,
+    // et le bandeau réduit masque le badge secondaire et le paragraphe du
+    // propriétaire — contenu « risque » à ne pas montrer aux clients), et
+    // AUCUNE section sous la carte : zone-suite vidée, section Protection
+    // et pied de page masqués. Il ne reste que le bandeau mince, la carte
+    // plein écran (zone 100dvh) et les panneaux de la carte.
+    document.body.classList.add('mode-client');
+    $('bandeau').classList.add('bandeau-reduit');
+    $('zone-suite').innerHTML = '';
+    const sp = $('section-protection'); if(sp) sp.style.display = 'none';
+    const pf = $('pied-page'); if(pf) pf.style.display = 'none';
+    initCarteClient();
+  }
+
+  function initCarteClient(){
+    const rendu = L.canvas({padding: 0.5});
+    const carte = L.map('map', {renderer: rendu});
+    carteGlobale = carte;
+    carte.attributionControl.setPrefix('© 2026 Frédéric Waltzing — Tous droits réservés');
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(carte);
+    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:18});
+    L.control.layers({'Plan':osm,'Satellite':sat}, null, {position:'topleft'}).addTo(carte);
+    carte.fitBounds([[47.99,-74.02],[49.15,-69.97]]);
+    document.getElementById('map').addEventListener('contextmenu', e => e.preventDefault());
+
+    // Cadastre : même service public en direct que dans l'espace propriétaire.
+    const ZOOM_CADASTRE = 15;
+    const SVC_CADASTRE = 'https://geo.environnement.gouv.qc.ca/donnees/rest/services/Reference/Cadastre_allege/MapServer';
+    const FENETRE_SLSJ = {geometry:'-73.6,47.7,-69.9,50.1', geometryType:'esriGeometryEnvelope',
+      inSR:'4326', spatialRel:'esriSpatialRelIntersects'};
+    carte.createPane('panneauCadastre');
+    carte.getPane('panneauCadastre').style.zIndex = 450;
+
+    const CoucheCadastre = L.GridLayer.extend({
+      createTile: function(coords, fini){
+        const img = document.createElement('img');
+        img.alt = '';
+        if(coords.z < ZOOM_CADASTRE){ fini(null, img); return img; }
+        const taille = this.getTileSize();
+        const pNO = coords.scaleBy(taille);
+        const pSE = pNO.add(taille);
+        const no = carte.unproject(pNO, coords.z);
+        const se = carte.unproject(pSE, coords.z);
+        img.onload = () => fini(null, img);
+        img.onerror = () => fini(null, img);
+        img.src = SVC_CADASTRE + '/export?bbox=' + [no.lng, se.lat, se.lng, no.lat].join(',') +
+          '&bboxSR=4326&imageSR=3857&size=' + taille.x + ',' + taille.y +
+          '&format=png32&transparent=true&layers=show:0&f=image';
+        return img;
+      }
+    });
+    const coucheCadastre = new CoucheCadastre({pane:'panneauCadastre'});
+    const coucheSurlignage = L.geoJSON(null, {pane:'panneauCadastre',
+      style:{color:'#E8A33D', weight:4, fillColor:'#E8A33D', fillOpacity:.08}});
+    coucheSurlignage.addTo(carte);
+
+    const ctrlCol = L.control({position:'topright'});
+    ctrlCol.onAdd = () => {
+      const d = L.DomUtil.create('div', 'colonne-panneaux');
+      d.innerHTML =
+        '<div class="bloc-panneau panneau-cad" id="bloc-cadastre">' +
+          '<div class="entete-bloc" id="entete-cadastre">' +
+            '<label for="coche-cadastre"><input type="checkbox" id="coche-cadastre" checked> Cadastre (lots)</label>' +
+            '<button type="button" class="bascule-bloc" id="bascule-cad" aria-label="Réduire ou déployer le panneau Cadastre">−</button>' +
+          '</div>' +
+          '<p class="mention-cad" id="astuce-cad"></p>' +
+          '<div class="corps corps-bloc" id="corps-cad">' +
+            '<p class="instruction-client">Inscris ton numéro de lot, puis touche ton lot dans la liste.</p>' +
+            '<input type="text" id="champ-lot" inputmode="numeric" autocomplete="off" aria-label="Recherche par numéro de lot" placeholder="🔎 Nº de lot (ex. : 3 996 745)">' +
+            '<ul id="liste-lots"></ul>' +
+            '<p id="msg-lot"></p>' +
+            '<div id="selection-client"></div>' +
+            '<p class="mention-cad">Limites de lots à titre indicatif seulement — seul un arpenteur-géomètre peut établir une limite légale. Source : Cadastre du Québec (MRNF), service en direct.</p>' +
+            '<button type="button" id="bouton-verrouiller-client">🔒 Verrouiller cet appareil</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bloc-panneau" id="bloc-fiche-client">' +
+          '<div class="entete-bloc" id="entete-fiche-client">' +
+            '<span class="titre-bloc" id="titre-fiche-client">Fiche du lot</span>' +
+            '<button type="button" class="bascule-bloc" id="bascule-fiche-client" aria-label="Réduire ou déployer la fiche du lot">−</button>' +
+          '</div>' +
+          '<div class="corps-bloc" id="fiche-client"></div>' +
+        '</div>';
+      L.DomEvent.disableClickPropagation(d);
+      L.DomEvent.disableScrollPropagation(d);
+      protegerClicsPanneau(d);
+      // Au doigt, le geste doit défiler LA COLONNE, pas la carte —
+      // sinon le bas de la fiche (les montants) reste inatteignable.
+      d.addEventListener('touchmove', (e) => { e.stopPropagation(); }, {passive:true});
+      d.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+      // Hauteur calée sur la carte : la colonne (en haut à droite, dans
+      // l'espace libéré par le choix de carte passé à gauche) descend
+      // jusqu'à ~40 px du bas de la carte, au-dessus des crédits.
+      const ajusterHauteurColonne = () => {
+        d.style.maxHeight = Math.max(200, carte.getSize().y - 40) + 'px';
+      };
+      ajusterHauteurColonne();
+      carte.on('resize', ajusterHauteurColonne);
+      return d;
+    };
+    ctrlCol.addTo(carte);
+
+    const cocheCad = document.getElementById('coche-cadastre');
+    // Case « Cadastre (lots) » cochée par défaut (demande de Frédéric,
+    // 2026-11-11) : la couche est ajoutée dès l'ouverture de l'espace.
+    // Elle ne dessine rien sous le zoom 15 (tuiles vides) et l'astuce
+    // de zoom rappelle au besoin de zoomer pour voir les lots.
+    coucheCadastre.addTo(carte);
+    // Astuce de zoom DIFFÉRÉE : majAstuceCad lit des constantes déclarées
+    // plus bas dans cette fonction (astuceCad) ; l'appeler ici, tout de
+    // suite, plante le reste de la construction de l'espace (piège TDZ,
+    // vécu le 2026-11-11 : case du cadastre sans effet, clics de lots
+    // morts). Le setTimeout laisse la fonction se terminer d'abord.
+    setTimeout(() => { try { majAstuceCad(); } catch(e){} }, 0);
+    const champLot = document.getElementById('champ-lot');
+    const listeLots = document.getElementById('liste-lots');
+    const msgLot = document.getElementById('msg-lot');
+    const astuceCad = document.getElementById('astuce-cad');
+    const corpsCad = document.getElementById('corps-cad');
+    const basculeCad = document.getElementById('bascule-cad');
+    document.getElementById('bouton-verrouiller-client').addEventListener('click', verrouillerAppareil);
+    const ficheClient = document.getElementById('fiche-client');
+    const blocFicheClient = document.getElementById('bloc-fiche-client');
+    // La fiche centrée est déjà dans le périmètre de la colonne, mais
+    // on la protège aussi nommément : aucun clic sur elle (entête,
+    // bascule, choix de franchise) ne doit jamais atteindre la carte.
+    protegerClicsPanneau(blocFicheClient);
+    const titreFicheClient = document.getElementById('titre-fiche-client');
+    const basculeFicheClient = document.getElementById('bascule-fiche-client');
+
+    function basculerCorps(corps, bouton){
+      const ferme = corps.classList.toggle('ferme');
+      if(bouton) bouton.textContent = ferme ? '+' : '−';
+      return ferme;
+    }
+    function replierCorps(corps, bouton){
+      corps.classList.add('ferme');
+      if(bouton) bouton.textContent = '+';
+    }
+    function deplierCorps(corps, bouton){
+      corps.classList.remove('ferme');
+      if(bouton) bouton.textContent = '−';
+    }
+    basculeCad.addEventListener('click', () => basculerCorps(corpsCad, basculeCad));
+    basculeFicheClient.addEventListener('click', () => basculerCorps(ficheClient, basculeFicheClient));
+    document.getElementById('entete-cadastre').addEventListener('click', (e) => {
+      if(e.target.closest('label, input, button')) return;
+      basculerCorps(corpsCad, basculeCad);
+    });
+    document.getElementById('entete-fiche-client').addEventListener('click', (e) => {
+      if(e.target.closest('button')) return;
+      basculerCorps(ficheClient, basculeFicheClient);
+    });
+    if(window.matchMedia && window.matchMedia('(max-width: 640px)').matches){
+      replierCorps(corpsCad, basculeCad);
+    }
+
+    function ouvrirBlocFicheClient(numero){
+      titreFicheClient.textContent = numero ? 'Lot ' + numero : 'Fiche du lot';
+      blocFicheClient.style.display = 'block';
+      deplierCorps(ficheClient, basculeFicheClient);
+      if(window.matchMedia && window.matchMedia('(max-width: 640px)').matches){
+        replierCorps(corpsCad, basculeCad);
+      }
+    }
+
+    function majAstuceCad(){
+      astuceCad.textContent = (cocheCad.checked && carte.getZoom() < ZOOM_CADASTRE)
+        ? 'Zoome à ' + ZOOM_CADASTRE + ' et + : les lots ne s\u2019affichent qu\u2019à partir de l\u2019échelle 1:30 000.'
+        : '';
+    }
+    cocheCad.addEventListener('change', () => {
+      if(cocheCad.checked) coucheCadastre.addTo(carte);
+      else carte.removeLayer(coucheCadastre);
+      majAstuceCad();
+    });
+    carte.on('zoomend', majAstuceCad);
+
+    // ===== Bouton « Me localiser » (espace client) =====
+    // Optionnel : rien ne se passe tant que le client ne touche pas le
+    // bouton ; c'est alors SON navigateur qui demande la permission.
+    // La position ne quitte jamais l'appareil : elle sert seulement à
+    // centrer la carte (zoom 16, là où les lots du cadastre — cochés
+    // par défaut — se dessinent) et à poser le point « Vous êtes ici ».
+    // Le client touche ensuite son lot pour ouvrir sa fiche.
+    let groupeMoi = null;
+    const ctrlLoc = L.control({position:'topleft'});
+    ctrlLoc.onAdd = () => {
+      const d = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      d.innerHTML = '<button type="button" class="bouton-localiser" id="bouton-localiser-client" title="Me localiser" aria-label="Me localiser">📍</button>';
+      L.DomEvent.disableClickPropagation(d);
+      protegerClicsPanneau(d);
+      return d;
+    };
+    ctrlLoc.addTo(carte);
+    document.getElementById('bouton-localiser-client').addEventListener('click', () => {
+      if(!navigator.geolocation){
+        deplierCorps(corpsCad, basculeCad);
+        msgLot.textContent = 'La localisation n’est pas offerte par cet appareil — inscris ton numéro de lot.';
+        return;
+      }
+      msgLot.textContent = 'Localisation en cours…';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude;
+          if(!cocheCad.checked){ cocheCad.checked = true; coucheCadastre.addTo(carte); majAstuceCad(); }
+          if(groupeMoi){ carte.removeLayer(groupeMoi); groupeMoi = null; }
+          groupeMoi = L.layerGroup();
+          const precision = pos.coords.accuracy || 0;
+          if(precision > 50){
+            groupeMoi.addLayer(L.circle([lat, lng], {radius: precision, pane:'panneauCadastre',
+              color:'#1a73e8', weight:1, opacity:.5, fillColor:'#1a73e8', fillOpacity:.08}));
+          }
+          const point = L.circleMarker([lat, lng], {radius:8, pane:'panneauCadastre',
+            color:'#fff', weight:2, fillColor:'#1a73e8', fillOpacity:1});
+          point.bindTooltip('Vous êtes ici', {permanent:false});
+          groupeMoi.addLayer(point);
+          groupeMoi.addTo(carte);
+          point.openTooltip();
+          carte.flyTo([lat, lng], Math.max(carte.getZoom(), 16));
+          msgLot.textContent = 'Te voilà — touche ton lot sur la carte pour voir sa fiche.';
+        },
+        () => {
+          deplierCorps(corpsCad, basculeCad);
+          msgLot.textContent = 'Localisation refusée ou impossible — inscris ton numéro de lot.';
+        },
+        {enableHighAccuracy:true, timeout:15000, maximumAge:60000}
+      );
+    });
+
+    async function requeteCadastre(params){
+      const u = new URL(SVC_CADASTRE + '/0/query');
+      u.search = new URLSearchParams(Object.assign({f:'json'}, params)).toString();
+      const r = await fetch(u);
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if(d.error) throw new Error(d.error.message || 'erreur du service');
+      return d;
+    }
+
+    function motifsPrefixe(chiffres){
+      const motifs = new Set();
+      for(const L of [4,5,6,7,8]){
+        if(L < chiffres.length) continue;
+        let m = '';
+        for(let i = 0; i < chiffres.length; i++){
+          m += chiffres[i];
+          const places = i + 1;
+          if(places < chiffres.length && (L - places) % 3 === 0) m += ' ';
+        }
+        motifs.add(m + '%');
+      }
+      motifs.add(chiffres + '%');
+      return [...motifs];
+    }
+
+    let minuteurLot = null, seqLot = 0;
+    champLot.addEventListener('input', () => {
+      clearTimeout(minuteurLot);
+      const chiffres = champLot.value.replace(/\D/g, '');
+      listeLots.innerHTML = '';
+      if(chiffres.length < 3){
+        msgLot.textContent = chiffres.length ? 'Continue : 3 chiffres minimum pour chercher.' : '';
+        return;
+      }
+      msgLot.textContent = 'Recherche des lots commençant par ' + chiffres + '…';
+      minuteurLot = setTimeout(() => chercherLots(chiffres), 300);
+    });
+
+    async function chercherLots(chiffres){
+      const seq = ++seqLot;
+      try {
+        const where = '(' + motifsPrefixe(chiffres).map(m => "NO_LOT LIKE '" + m + "'").join(' OR ') + ')';
+        const d = await requeteCadastre(Object.assign({}, FENETRE_SLSJ, {
+          where, outFields:'NO_LOT', returnGeometry:'false',
+          orderByFields:'NO_LOT', resultRecordCount:'10', outSR:'4326'}));
+        if(seq !== seqLot) return;
+        const numeros = [...new Set((d.features || []).map(f => f.attributes.NO_LOT))];
+        listeLots.innerHTML = '';
+        if(!numeros.length){
+          msgLot.textContent = 'Aucun lot trouvé dans la région pour ces chiffres.';
+          return;
+        }
+        msgLot.textContent = 'Lots trouvés — touche un numéro pour zoomer dessus :';
+        for(const n of numeros){
+          const li = document.createElement('li');
+          li.textContent = 'Lot ' + n;
+          li.addEventListener('click', () => choisirLotClient(n));
+          listeLots.appendChild(li);
+        }
+      } catch(e){
+        if(seq !== seqLot) return;
+        listeLots.innerHTML = '';
+        msgLot.textContent = '⚠️ Service du cadastre injoignable pour le moment — réessaie dans un instant.';
+      }
+    }
+
+    // ===== Sélection multiple de lots (dossier) — espace client =====
+    // Toucher un lot (carte ou liste de recherche) l'AJOUTE à la
+    // sélection ; retoucher un lot déjà sélectionné le RETIRE. Chaque
+    // lot sélectionné garde son surlignage. À 1 seul lot, la fiche du
+    // lot part exactement comme avant ; dès 2 lots, le panneau liste
+    // la sélection et le bouton « Voir la fiche des N lots » ouvre la
+    // fiche combinée du dossier (afficherFicheClientCombinee). La
+    // sélection survit aux déplacements et aux zooms ; elle repart à
+    // zéro à chaque déverrouillage (panneaux reconstruits).
+    let selectionClient = [];
+    const boiteSelectionClient = document.getElementById('selection-client');
+    function majSurbrillanceClient(){
+      coucheSurlignage.clearLayers();
+      const feats = [];
+      selectionClient.forEach(sel => sel.feats.forEach(f => feats.push(f)));
+      if(feats.length) coucheSurlignage.addData({type:'FeatureCollection', features:feats});
+    }
+    function rendreSelectionClient(){
+      if(!boiteSelectionClient) return;
+      if(!selectionClient.length){ boiteSelectionClient.innerHTML = ''; return; }
+      let h = '<div class="sel-titre">Lots sélectionnés (' + selectionClient.length + ')</div>';
+      selectionClient.forEach((sel, i) => {
+        h += '<div class="sel-item"><span>Lot ' + sel.numero + '</span>' +
+          '<button type="button" data-retirer-client="' + i + '">✕ Retirer</button></div>';
+      });
+      h += '<div class="sel-actions"><button type="button" id="sel-tout-effacer-client">Tout effacer</button>' +
+        '<button type="button" class="sel-voir" id="sel-lancer-client">Lancer la recherche' +
+        (selectionClient.length >= 2 ? ' (' + selectionClient.length + ' lots)' : '') + '</button></div>';
+      boiteSelectionClient.innerHTML = h;
+      boiteSelectionClient.querySelectorAll('[data-retirer-client]').forEach(b => {
+        b.addEventListener('click', () => retirerLotClient(Number(b.getAttribute('data-retirer-client'))));
+      });
+      const be = document.getElementById('sel-tout-effacer-client');
+      if(be) be.addEventListener('click', effacerSelectionClient);
+      const bl = document.getElementById('sel-lancer-client');
+      if(bl) bl.addEventListener('click', () => {
+        if(selectionClient.length === 1) afficherFicheClient(selectionClient[0].numero);
+        else if(selectionClient.length >= 2) afficherFicheClientCombinee();
+      });
+    }
+    function fermerFicheClient(){
+      seqFicheClient++;
+      annulerRevel();
+      cacherIndicateurCalcul();
+      ficheClient.innerHTML = '';
+      titreFicheClient.textContent = 'Fiche du lot';
+      // Panneau fixe centré : une fois la sélection effacée, il se
+      // remasque (il ne réapparaîtra qu'au prochain lancement).
+      blocFicheClient.style.display = 'none';
+    }
+    function retirerLotClient(idx){
+      const retire = selectionClient[idx];
+      if(!retire) return;
+      selectionClient.splice(idx, 1);
+      majSurbrillanceClient();
+      rendreSelectionClient();
+      if(selectionClient.length === 1){
+        msgLot.textContent = 'Lot ' + retire.numero + ' retiré de la sélection. Lot ' +
+          selectionClient[0].numero + ' surligné en jaune sur la carte — touchez « Lancer la recherche » pour afficher sa fiche.';
+      } else if(selectionClient.length === 0){
+        msgLot.textContent = 'Sélection effacée.';
+        fermerFicheClient();
+      } else {
+        // La fiche affichée (si elle existe) n'est PAS relancée ni
+        // fermée : elle sera remplacée au prochain « Lancer la
+        // recherche », avec la nouvelle sélection.
+        msgLot.textContent = 'Lot ' + retire.numero + ' retiré — ' + selectionClient.length +
+          ' lots sélectionnés. Touchez « Lancer la recherche » pour relancer avec cette sélection.';
+      }
+    }
+    function effacerSelectionClient(){
+      selectionClient = [];
+      majSurbrillanceClient();
+      rendreSelectionClient();
+      msgLot.textContent = 'Sélection effacée.';
+      fermerFicheClient();
+    }
+
+    async function choisirLotClient(numero, depuisCarte){
+      listeLots.innerHTML = '';
+      const chiffresNouveau = numero.replace(/\D/g, '');
+      const idxExistant = selectionClient.findIndex(sel => sel.chiffres === chiffresNouveau);
+      if(idxExistant >= 0){ retirerLotClient(idxExistant); return; }
+      msgLot.textContent = 'Localisation du lot ' + numero + '…';
+      try {
+        const d = await requeteCadastre(Object.assign({}, FENETRE_SLSJ, {
+          where: "NO_LOT = '" + numero.replace(/'/g, "''") + "'",
+          outFields:'NO_LOT', returnGeometry:'true', outSR:'4326', f:'geojson'}));
+        const feats = d.features || [];
+        if(!feats.length){
+          msgLot.textContent = 'Lot ' + numero + ' introuvable dans la région.';
+          return;
+        }
+        if(!cocheCad.checked){
+          cocheCad.checked = true;
+          coucheCadastre.addTo(carte);
+        }
+        selectionClient.push({ numero: numero, chiffres: chiffresNouveau, feats: feats });
+        majSurbrillanceClient();
+        // Sélection depuis la RECHERCHE : on vole jusqu'au lot ajouté.
+        // Depuis un TOUCHER sur la carte (depuisCarte) : aucun
+        // déplacement — le lot est déjà sous les yeux.
+        if(!depuisCarte){
+          const limites = L.geoJSON({type:'FeatureCollection', features:feats}).getBounds();
+          const z = Math.max(Math.min(carte.getBoundsZoom(limites), 17), ZOOM_CADASTRE);
+          carte.flyTo(limites.getCenter(), z);
+        }
+        majAstuceCad();
+        rendreSelectionClient();
+        // Sélectionner n'affiche RIEN automatiquement : le lot est
+        // ajouté (surlignage + liste), et c'est le bouton « Lancer la
+        // recherche » du panneau qui démarre la fiche (1 ou N lots).
+        if(selectionClient.length === 1){
+          msgLot.textContent = 'Lot ' + numero + ' surligné en jaune sur la carte — touchez « Lancer la recherche » pour afficher sa fiche.';
+        } else {
+          msgLot.textContent = 'Lot ' + numero + ' ajouté — ' + selectionClient.length +
+            ' lots sélectionnés. Touchez « Lancer la recherche » pour afficher la fiche du dossier.';
+        }
+      } catch(e){
+        msgLot.textContent = '⚠️ Service du cadastre injoignable pour le moment — réessaie dans un instant.';
+      }
+    }
+
+    carte.on('click', async (e) => {
+      // Ceinture de sécurité (en plus de protegerClicsPanneau) : un
+      // clic né dans un élément d'interface ne sélectionne jamais un
+      // lot, même si sa propagation n'a pas été arrêtée en route.
+      const cibleClic = e.originalEvent && e.originalEvent.target;
+      if(cibleClic && cibleClic.closest && cibleClic.closest('.colonne-panneaux, #indicateur-calcul')) return;
+      if(!cocheCad.checked) return;
+      if(carte.getZoom() < ZOOM_CADASTRE) return;
+      const pt = carte.latLngToContainerPoint(e.latlng);
+      const p1 = carte.containerPointToLatLng(L.point(pt.x - 14, pt.y - 14));
+      const p2 = carte.containerPointToLatLng(L.point(pt.x + 14, pt.y + 14));
+      try {
+        const d = await requeteCadastre({
+          geometry: [Math.min(p1.lng, p2.lng), Math.min(p1.lat, p2.lat),
+                     Math.max(p1.lng, p2.lng), Math.max(p1.lat, p2.lat)].join(','),
+          geometryType: 'esriGeometryEnvelope', inSR: '4326',
+          spatialRel: 'esriSpatialRelIntersects',
+          outFields: 'NO_LOT', returnGeometry: 'false',
+          resultRecordCount: '1', outSR: '4326'});
+        const f0 = (d.features || [])[0];
+        if(f0 && f0.attributes && f0.attributes.NO_LOT) choisirLotClient(f0.attributes.NO_LOT, true);
+      } catch(err){ /* silencieux */ }
+    });
+
+    // ===== Fiche client : résumé précalculé du lot, révélé par étapes =====
+    // À la sélection, le bloc de la fiche s'OUVRE D'ABORD (les autres blocs
+    // se réduisent sur téléphone) et on le rend visible dans la colonne ;
+    // la séquence joue ensuite dans le bloc déployé : phase « Calcul en
+    // cours… » (indicateur central fixe en haut de l'écran : pastille
+    // pétrole à rond tournant et libellé d'étape, visible pendant toute
+    // la séquence), superficie du lot, essences une à une, reste,
+    // totaux — puis les semblants de recherche des distances
+    // d'intervention, SÉPARÉS en deux étapes successives (la caserne de
+    // pompiers la plus proche d'abord, révélée après sa propre attente,
+    // puis la base SOPFEU la plus proche, révélée de même) — et, en
+    // tout dernier, la prime
+    // indicative demandée au serveur (route /prime), après son propre
+    // temps de calcul. Le rond disparaît quand tout est affiché. Si un autre lot est choisi
+    // pendant l'animation, on repart à zéro pour le nouveau lot (jeton de
+    // séquence + minuteurs annulés) — jamais de mélange d'anciennes
+    // lignes. Les superficies sont EXACTEMENT celles du résumé
+    // précalculé ; seule la présentation est étagée.
+    // Durée de la séquence (constantes regroupées ici pour réglage
+    // futur) : le budget PRINCIPAL de la séquence est tiré au hasard à
+    // chaque fiche entre DUREE_MIN_MS et DUREE_MAX_MS, puis réparti
+    // par planifierSequence() entre la phase de calcul,
+    // les écarts entre lignes (avec une légère variation d'un écart à
+    // l'autre — jamais des écarts parfaitement égaux), les étapes des
+    // distances (deux recherches séparées qui se partagent leur part)
+    // et l'attente de la prime. Une fiche courte atteint
+    // quand même le minimum (la phase de calcul et les étapes
+    // distances absorbent le budget) ; une fiche longue resserre les
+    // écarts jusqu'au plancher PLANCHER_LIGNE_MS sans dépasser le
+    // maximum.
+    const DUREE_MIN_MS = 15000;    // durée totale minimale de la séquence
+    const DUREE_MAX_MS = 20000;    // durée totale maximale de la séquence
+    const PLANCHER_LIGNE_MS = 450; // écart minimal entre deux lignes
+    const PLANCHER_CALCUL_MS = 1500; // phase « Calcul en cours… » minimale
+    const PLANCHER_DIST_MS = 1200;   // étape des distances minimale
+    const PLANCHER_PRIME_MS = 800;   // attente de la prime minimale
+    // Parts de base préférées (avant répartition du budget restant) :
+    const BASE_CALCUL_MS = 2200, BASE_DIST_MS = 2000, BASE_PRIME_MS = 1200;
+    // Attente DÉDIÉE juste avant l'affichage de la prime, tirée au
+    // hasard à chaque séquence : elle s'AJOUTE au budget principal
+    // ci-dessus (le temps total avant la prime est donc d'environ
+    // 25 à 32 s). Pendant cette attente, le rond « Calcul en cours… »
+    // reste affiché : la prime est le résultat final du calcul.
+    const DELAI_AVANT_PRIME_MIN_MS = 10000;
+    const DELAI_AVANT_PRIME_MAX_MS = 12000;
+    // Changement de franchise par le client : la prime ne bascule pas
+    // instantanément — un « Recalcul de la prime… » d'une dizaine de
+    // secondes (tiré au hasard entre ces bornes) s'affiche, SANS rejouer
+    // ni les superficies ni la recherche des distances, déjà à l'écran.
+    const DELAI_RECALCUL_MIN_MS = 9000;
+    const DELAI_RECALCUL_MAX_MS = 12000;
+
+    // Répartit la durée totale tirée au hasard sur les étapes de la
+    // séquence. nbEtapes = nombre de lignes à révéler ; les écarts
+    // retournés séparent les lignes entre elles, et le dernier écart
+    // sépare la dernière ligne des étapes de distances. La somme des
+    // attentes (calcul + écarts + distances + prime) vaut la durée
+    // tirée, sauf ajustements de plancher marginaux. La part des
+    // distances est elle-même partagée, à variation aléatoire, entre
+    // les DEUX recherches successives (caserne de pompiers, puis base
+    // SOPFEU) : dureeDistCaserne + dureeDistSopfeu = dureeDist.
+    // S'y ajoute dureeAvantPrime, l'attente dédiée de 10 à 12 s juste
+    // avant l'affichage de la prime (hors budget principal).
+    function planifierSequence(nbEtapes){
+      const dureeTotale = DUREE_MIN_MS + Math.random() * (DUREE_MAX_MS - DUREE_MIN_MS);
+      const dureeAvantPrime = DELAI_AVANT_PRIME_MIN_MS + Math.random() * (DELAI_AVANT_PRIME_MAX_MS - DELAI_AVANT_PRIME_MIN_MS);
+      let dureeCalcul = BASE_CALCUL_MS, dureeDist = BASE_DIST_MS, dureePrime = BASE_PRIME_MS;
+      const reste = dureeTotale - (dureeCalcul + dureeDist + dureePrime);
+      dureeCalcul += reste * 0.20;
+      dureeDist += reste * 0.15;
+      dureePrime += reste * 0.10;
+      const budgetEcarts = reste * 0.55;
+      const nbEcarts = Math.max(nbEtapes, 1);
+      // Écarts à variation aléatoire, normalisés sur le budget.
+      const poids = [];
+      let sommePoids = 0;
+      for(let i = 0; i < nbEcarts; i++){ const p = 0.8 + Math.random() * 0.5; poids.push(p); sommePoids += p; }
+      const ecarts = poids.map(p => budgetEcarts * p / sommePoids);
+      // Plancher par écart : on remonte les écarts trop courts et on
+      // reprend le manque sur les écarts restés au-dessus du plancher,
+      // puis sur les autres phases jusqu'à leurs propres planchers.
+      for(let tour = 0; tour < 3; tour++){
+        let manque = 0;
+        for(let i = 0; i < nbEcarts; i++){
+          if(ecarts[i] < PLANCHER_LIGNE_MS){ manque += PLANCHER_LIGNE_MS - ecarts[i]; ecarts[i] = PLANCHER_LIGNE_MS; }
+        }
+        if(manque <= 0) break;
+        let dispo = 0;
+        for(let i = 0; i < nbEcarts; i++) if(ecarts[i] > PLANCHER_LIGNE_MS) dispo += ecarts[i] - PLANCHER_LIGNE_MS;
+        if(dispo > 0){
+          const reprise = Math.min(manque, dispo);
+          for(let i = 0; i < nbEcarts; i++){
+            if(ecarts[i] > PLANCHER_LIGNE_MS) ecarts[i] -= reprise * (ecarts[i] - PLANCHER_LIGNE_MS) / dispo;
+          }
+          manque -= reprise;
+        }
+        if(manque > 0){
+          const r1 = Math.min(manque, dureeCalcul - PLANCHER_CALCUL_MS); dureeCalcul -= r1; manque -= r1;
+          const r2 = Math.min(manque, dureeDist - PLANCHER_DIST_MS); dureeDist -= r2; manque -= r2;
+          const r3 = Math.min(manque, dureePrime - PLANCHER_PRIME_MS); dureePrime -= r3; manque -= r3;
+        }
+        if(manque <= 0) break;
+      }
+      // Partage de la part « distances » entre les deux recherches
+      // successives (caserne, puis SOPFEU), à variation aléatoire
+      // entre les deux — jamais un partage parfaitement égal.
+      const poidsDistC = 0.8 + Math.random() * 0.5;
+      const poidsDistS = 0.8 + Math.random() * 0.5;
+      const dureeDistCaserne = dureeDist * poidsDistC / (poidsDistC + poidsDistS);
+      const dureeDistSopfeu = dureeDist - dureeDistCaserne;
+      return {dureeCalcul, ecarts, dureeDist, dureeDistCaserne, dureeDistSopfeu, dureePrime, dureeAvantPrime};
+    }
+    const cacheFragmentsClient = {};
+    async function dechiffrerFragmentClient(prefixe){
+      if(cacheFragmentsClient[prefixe]) return cacheFragmentsClient[prefixe];
+      const r = await fetch('donnees-clients/' + prefixe + '.json.enc');
+      if(!r.ok) throw new Error('fragment introuvable : ' + prefixe);
+      const buf = await r.arrayBuffer();
+      const clair = await crypto.subtle.decrypt(
+        {name:'AES-GCM', iv: new Uint8Array(buf.slice(0,12))}, cleDonnees, buf.slice(12));
+      const d = JSON.parse(new TextDecoder().decode(clair));
+      cacheFragmentsClient[prefixe] = d;
+      return d;
+    }
+
+    // Prime indicative : demandée au serveur (POST /prime), qui la calcule
+    // avec les taux courants du propriétaire. La page ne reçoit QUE les
+    // deux montants finaux (franchise 1 000 $ et 500 $), en dollars par an
+    // arrondis — jamais les taux, les classes ni les hectares par classe —
+    // plus, depuis les distances incendie, les distances du lot à la
+    // caserne et à la base SOPFEU les plus proches, avec leurs noms, et
+    // la valeur estimée du bois du lot (montant seul, sans détail).
+    // Échec ou lot inconnu : null (la fiche affichera alors la ligne
+    // discrète « Prime : nous consulter. », sans bloquer les superficies).
+    async function demanderPrimeClient(numero){
+      try {
+        const r = await fetch(URL_BASE_VERROU + '/prime', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({numero})
+        });
+        if(!r.ok) return null;
+        const d = await r.json();
+        if(d && isFinite(Number(d.prime1000)) && isFinite(Number(d.prime500))){
+          const p = {prime1000: Number(d.prime1000), prime500: Number(d.prime500)};
+          // Valeur estimée du bois du lot (même réponse du serveur) :
+          // révélée juste après la prime, en dernière étape.
+          if(isFinite(Number(d.valeur))) p.valeur = Number(d.valeur);
+          // Chaque distance est retenue pour elle-même : si une seule
+          // des deux est présente, la fiche jouera seulement son étape
+          // de recherche (la part de l'autre est absorbée par l'attente
+          // de la prime, durées totales conservées).
+          if(isFinite(Number(d.distCaserne))){ p.distCaserne = Number(d.distCaserne); p.caserne = d.caserne || ''; }
+          if(isFinite(Number(d.distSopfeu))){ p.distSopfeu = Number(d.distSopfeu); p.baseSopfeu = d.baseSopfeu || ''; }
+          return p;
+        }
+      } catch(e){ /* repli silencieux : « nous consulter » */ }
+      return null;
+    }
+
+    // Encadré vedette de la prime (affiché en dernier) : le choix de
+    // franchise commute le montant entre prime1000 et prime500.
+    // Distances d'intervention de la fiche client : révélées dans
+    // leurs propres étapes de la séquence, chacune après son semblant
+    // de recherche (voir la finale de afficherFicheClient) — plus dans
+    // l'encadré prime.
+    function htmlDistanceCaserneClient(prime){
+      return '<p class="dist-client">🚒 Caserne la plus proche : <b>' + fmtNombre(prime.distCaserne, 1) + ' km</b>' +
+        (prime.caserne ? '<br>' + prime.caserne : '') + '</p>';
+    }
+    function htmlDistanceSopfeuClient(prime){
+      return '<p class="dist-client">✈️ Base SOPFEU la plus proche : <b>' + fmtNombre(prime.distSopfeu, 1) + ' km</b>' +
+        (prime.baseSopfeu ? '<br>' + prime.baseSopfeu : '') + '</p>';
+    }
+    function htmlDistancesClient(prime){
+      return htmlDistanceCaserneClient(prime) + htmlDistanceSopfeuClient(prime);
+    }
+
+    function htmlPrimeClient(prime){
+      return '<div class="prime-vedette">' +
+        '<div class="titre-section">Prime indicative</div>' +
+        '<div class="prime-choix" role="radiogroup" aria-label="Choix de la franchise">' +
+          '<label><input type="radio" name="franchise-client" value="1000" checked> Franchise 1 000 $</label>' +
+          '<label><input type="radio" name="franchise-client" value="500"> Franchise 500 $</label>' +
+        '</div>' +
+        '<div class="prime-montant">' + fmtNombre(prime.prime1000, 0) + ' $ / an</div>' +
+        '<p class="prime-mention">Prime indicative — ne constitue pas une offre d\u2019assurance.</p>' +
+      '</div>';
+    }
+
+    // Valeur estimée du bois : dernière révélation de la fiche
+    // client, juste après l'encadré prime (court délai seulement).
+    // Jamais affichée si la propriété est non assurable (ni prime,
+    // ni valeur), et le changement de franchise ne la rejoue pas.
+    function htmlValeurClient(valeur, plusieurs){
+      return '<p class="valeur-client">Valeur estimée du bois ' +
+        (plusieurs ? 'de vos lots' : 'de votre lot') +
+        ' : <b>≈ ' + fmtNombre(valeur, 0) + ' $</b></p>';
+    }
+
+    let seqFicheClient = 0;
+    const minuteursRevel = [];
+    function annulerRevel(){
+      while(minuteursRevel.length) clearTimeout(minuteursRevel.pop());
+    }
+
+    // ===== Indicateur de calcul central (fiche client) : la pastille
+    // fixe en haut de l'écran (voir le CSS #indicateur-calcul). Elle
+    // porte le rond qui tourne et le libellé de l'étape en cours
+    // pendant toute la séquence et pendant le recalcul de franchise ;
+    // elle disparaît quand la prime (ou le montant recalculé) est
+    // affichée. Créée au premier usage, réutilisée ensuite. =====
+    let indicateurCalculEl = null;
+    function montrerIndicateurCalcul(libelle){
+      if(!indicateurCalculEl){
+        indicateurCalculEl = document.createElement('div');
+        indicateurCalculEl.id = 'indicateur-calcul';
+        indicateurCalculEl.innerHTML = '<span class="rond-calcul" aria-hidden="true"></span><span class="indicateur-libelle"></span>';
+        document.body.appendChild(indicateurCalculEl);
+        protegerClicsPanneau(indicateurCalculEl);
+      }
+      indicateurCalculEl.querySelector('.indicateur-libelle').textContent = libelle;
+      indicateurCalculEl.classList.add('visible');
+    }
+    function cacherIndicateurCalcul(){
+      if(indicateurCalculEl) indicateurCalculEl.classList.remove('visible');
+    }
+
+    async function afficherFicheClient(numero){
+      const seq = ++seqFicheClient;
+      annulerRevel();
+      // Le bloc s'ouvre D'ABORD et on le rend visible dans la colonne des
+      // panneaux : la séquence joue ensuite dans le bloc déployé, sous les
+      // yeux du client.
+      ouvrirBlocFicheClient(numero);
+      if(blocFicheClient.scrollIntoView){
+        try { blocFicheClient.scrollIntoView({block: 'nearest'}); } catch(e){ /* confort seulement */ }
+      }
+      ficheClient.innerHTML = '';
+      const zone = document.createElement('div');
+      ficheClient.appendChild(zone);
+      // L'élément « attente », APRÈS la zone des étapes, ne porte plus
+      // le rond de calcul : l'indicateur visuel de la séquence est
+      // désormais la pastille centrale en haut de l'écran (voir
+      // montrerIndicateurCalcul), visible en permanence sans être
+      // chassée par le défilement de la fiche. Cet élément reste
+      // l'emplacement des messages (données injoignables, aucun
+      // résumé) quand la séquence ne peut pas jouer.
+      const attente = document.createElement('div');
+      attente.className = 'attente-calcul';
+      ficheClient.appendChild(attente);
+      montrerIndicateurCalcul('Calcul en cours…');
+
+      // La demande de prime part tout de suite : son attente réelle se
+      // fond dans la phase de calcul, sans rallonger la séquence.
+      const promessePrime = demanderPrimeClient(numero);
+      const chiffres = numero.replace(/\D/g, '');
+      let resume = null, erreurDonnees = false;
+      try {
+        const frag = await dechiffrerFragmentClient(chiffres.slice(0, 2));
+        resume = frag[chiffres] || frag[numero.replace(/ /g, '')] || null;
+      } catch(e){ erreurDonnees = true; }
+      if(seq !== seqFicheClient) return; // un autre lot a été choisi entre-temps
+      if(erreurDonnees){
+        cacherIndicateurCalcul();
+        attente.innerHTML = '⚠️ Données du lot injoignables pour le moment — réessaie dans un instant.';
+        return;
+      }
+      if(!resume){
+        cacherIndicateurCalcul();
+        attente.innerHTML = 'Aucune donnée d\u2019inventaire disponible pour ce lot.';
+        return;
+      }
+
+      const lotHa = resume.l || 0, couvertHa = resume.c || 0;
+      const essences = Object.entries(resume.e || {}).sort((a, b) => b[1] - a[1]);
+      const restes = Object.entries(resume.r || {}).sort((a, b) => b[1] - a[1]);
+      const boiseHa = essences.reduce((s, kv) => s + kv[1], 0);
+      // Règle interne du boisé minimum : si le boisé affiché (somme
+      // des essences, arrondie à 2 décimales comme à l'écran) est sous
+      // le seuil, la fiche se termine par l'avis « Propriété non
+      // assurable » au lieu de la prime — sans choix de franchise. Le
+      // seuil lui-même n'apparaît dans aucun texte visible.
+      const nonAssurable = Number(boiseHa.toFixed(2)) < 3;
+      const pct = (ha) => lotHa > 0 ? fmtNombre(100 * ha / lotHa, 1) + ' %' : '—';
+      const etapes = [];
+      etapes.push('Lot <b>' + numero + '</b><br>Superficie du lot : <b>' + fmtNombre(lotHa, 2) + ' ha</b>');
+      essences.forEach(([nom, ha], i) => {
+        etapes.push((i === 0 ? '<div class="titre-section">Superficie boisée par essence dominante</div>' : '') +
+          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+      });
+      restes.forEach(([nom, ha], i) => {
+        etapes.push((i === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+      });
+      const nonClasse = lotHa - couvertHa;
+      if(nonClasse > 0.005){
+        etapes.push((restes.length === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+          '<div class="ligne-detail"><span>Non classé par l\u2019inventaire forestier</span><span class="val"><b>' +
+          fmtNombre(nonClasse, 2) + ' ha</b> · ' + pct(nonClasse) + '</span></div>');
+      }
+      etapes.push('<div class="total-client">Superficie boisée : ' + fmtNombre(boiseHa, 2) +
+        ' ha (' + pct(boiseHa) + ' du lot)</div>' +
+        '<p class="mention-cad">Superficies indicatives, calculées à partir de l\u2019inventaire écoforestier du MRNF et du cadastre du Québec. Les chemins ne sont cartographiés qu\u2019en partie dans l\u2019inventaire forestier.</p>');
+
+      // Plan de la séquence : durée totale aléatoire (15 à 20 s)
+      // répartie entre la phase de calcul, les écarts entre lignes,
+      // les étapes des distances et l'attente de la prime.
+      const plan = planifierSequence(etapes.length);
+      let instant = plan.dureeCalcul;
+      etapes.forEach((htmlEtape, idx) => {
+        if(idx > 0) instant += plan.ecarts[idx - 1];
+        const t = setTimeout(() => {
+          if(seq !== seqFicheClient) return;
+          const div = document.createElement('div');
+          div.className = 'ligne-revelee';
+          div.innerHTML = htmlEtape;
+          zone.appendChild(div);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+        }, instant);
+        minuteursRevel.push(t);
+      });
+      // Étapes de fin de séquence, enchaînées : d'abord les semblants
+      // de recherche des distances, SÉPARÉS en deux étapes successives
+      // — la pastille centrale affiche « Recherche de la caserne de
+      // pompiers… » pendant plan.dureeDistCaserne, puis le résultat de
+      // la caserne apparaît SEUL dans la fiche ; ensuite la pastille
+      // affiche « Recherche de la base SOPFEU… » pendant
+      // plan.dureeDistSopfeu, puis le résultat SOPFEU apparaît. Les
+      // deux parts se partagent l'ancienne étape unique (leur somme
+      // vaut plan.dureeDist) : l'enveloppe totale ne change pas. Vient
+      // ensuite la prime, élément vedette, après son propre temps de
+      // calcul. Le rond cesse quand la prime est affichée. Toute part
+      // de distance non jouée (distance absente de la réponse du
+      // serveur, ou aucune distance) est absorbée par l'attente de la
+      // prime : la durée totale tirée est conservée.
+      const tPrime = setTimeout(async () => {
+        if(seq !== seqFicheClient) return;
+        const prime = await promessePrime;
+        if(seq !== seqFicheClient) return;
+        const patienter = (ms) => new Promise(res => { minuteursRevel.push(setTimeout(res, ms)); });
+        const aCaserne = !!(prime && isFinite(prime.distCaserne));
+        const aSopfeu = !!(prime && isFinite(prime.distSopfeu));
+        let resteDist = plan.dureeDist; // part non consommée, reprise ci-dessous
+        // Pendant chaque recherche, seule la pastille centrale porte
+        // le libellé « Recherche de… » : plus de ligne grise dans la
+        // fiche (redondante depuis que la fiche est sous l'indicateur).
+        // Le résultat de distance est ajouté à la fiche à la FIN de
+        // son attente, directement.
+        if(aCaserne){
+          montrerIndicateurCalcul('Recherche de la caserne de pompiers…');
+          await patienter(plan.dureeDistCaserne);
+          if(seq !== seqFicheClient) return;
+          const divDist = document.createElement('div');
+          divDist.className = 'ligne-revelee';
+          divDist.innerHTML = htmlDistanceCaserneClient(prime);
+          zone.appendChild(divDist);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+          resteDist -= plan.dureeDistCaserne;
+        }
+        if(aSopfeu){
+          montrerIndicateurCalcul('Recherche de la base SOPFEU…');
+          await patienter(plan.dureeDistSopfeu);
+          if(seq !== seqFicheClient) return;
+          const divDist = document.createElement('div');
+          divDist.className = 'ligne-revelee';
+          divDist.innerHTML = htmlDistanceSopfeuClient(prime);
+          zone.appendChild(divDist);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+          resteDist -= plan.dureeDistSopfeu;
+        }
+        montrerIndicateurCalcul('Calcul de la prime…');
+        await patienter(plan.dureePrime + resteDist);
+        if(seq !== seqFicheClient) return;
+        // Attente dédiée juste avant la prime (10 à 12 s, tirées dans
+        // le plan) : l'indicateur central « Calcul de la prime… »
+        // reste affiché, la prime arrive comme le résultat final
+        // du calcul.
+        await patienter(plan.dureeAvantPrime);
+        if(seq !== seqFicheClient) return;
+        const div = document.createElement('div');
+        div.className = 'ligne-revelee';
+        if(nonAssurable){
+          div.innerHTML = '<p class="avis-non-assurable">Propriété non assurable</p>';
+          zone.appendChild(div);
+        } else if(prime){
+          div.innerHTML = htmlPrimeClient(prime);
+          zone.appendChild(div);
+          if(isFinite(prime.valeur)){
+            // Dernière révélation : la valeur estimée du bois,
+            // environ une seconde après la prime — pas de nouvelle
+            // attente longue. Le changement de franchise ne rejoue
+            // QUE la prime : cette ligne reste telle quelle.
+            const tValeur = setTimeout(() => {
+              if(seq !== seqFicheClient) return;
+              const divV = document.createElement('div');
+              divV.className = 'ligne-revelee';
+              divV.innerHTML = htmlValeurClient(prime.valeur, false);
+              zone.appendChild(divV);
+              ficheClient.scrollTop = ficheClient.scrollHeight;
+            }, 1200);
+            minuteursRevel.push(tValeur);
+          }
+          let minuteurRecalcul = null;
+          div.querySelectorAll('input[name="franchise-client"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+              const montant = div.querySelector('.prime-montant');
+              if(!montant) return;
+              // Changement de franchise : pas de bascule instantanée. Le
+              // montant laisse place à un état d'attente NET (texte
+              // « Recalcul de la prime… » en bloc, classe .prime-recalcul)
+              // d'une dizaine de secondes, pendant que l'indicateur
+              // central en haut de l'écran tourne avec le même libellé ;
+              // les superficies et les distances déjà affichées ne sont
+              // pas rejouées. Un nouveau changement pendant l'attente
+              // repart le délai à zéro. (L'ancien montage — petit rond
+              // en ligne dans le montant — ne tournait pas : span
+              // inline, transform inapplicable ; voir le CSS.)
+              if(minuteurRecalcul) clearTimeout(minuteurRecalcul);
+              montant.innerHTML = '<span class="prime-recalcul">Recalcul de la prime…</span>';
+              montrerIndicateurCalcul('Recalcul de la prime…');
+              const choix = radio.value;
+              minuteurRecalcul = setTimeout(() => {
+                if(seq !== seqFicheClient) return;
+                montant.textContent = fmtNombre(choix === '500' ? prime.prime500 : prime.prime1000, 0) + ' $ / an';
+                cacherIndicateurCalcul();
+              }, DELAI_RECALCUL_MIN_MS + Math.random() * (DELAI_RECALCUL_MAX_MS - DELAI_RECALCUL_MIN_MS));
+              minuteursRevel.push(minuteurRecalcul);
+            });
+          });
+        } else {
+          div.innerHTML = '<p class="prime-consulter">Prime : nous consulter.</p>';
+          zone.appendChild(div);
+        }
+        attente.remove();
+        cacherIndicateurCalcul();
+        ficheClient.scrollTop = ficheClient.scrollHeight;
+      }, instant + plan.ecarts[plan.ecarts.length - 1]);
+      minuteursRevel.push(tPrime);
+    }
+
+    // ===== Prime d'un DOSSIER (plusieurs lots) : POST /prime
+    // {numeros:[...]} — le serveur calcule chaque lot avec SES
+    // hectares par classe et SES majorations de distances, additionne
+    // les primes majorées, puis applique l'ouverture de dossier et le
+    // coût minimum UNE seule fois sur le total. Réponse normalisée :
+    // { prime1000, prime500, parLot: { chiffres: {distCaserne,
+    // caserne, distSopfeu, baseSopfeu} }, introuvables: [chiffres] } ;
+    // null si la demande échoue (repli « nous consulter »). =====
+    async function demanderPrimeClientMulti(chiffresList){
+      try {
+        const r = await fetch(URL_BASE_VERROU + '/prime', { method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ numeros: chiffresList }) });
+        if(!r.ok) return null;
+        const d = await r.json();
+        if(!d || d.ok !== true || !isFinite(Number(d.prime1000)) || !isFinite(Number(d.prime500))) return null;
+        const parLot = {};
+        (Array.isArray(d.lots) ? d.lots : []).forEach(l => {
+          if(l && l.numero) parLot[String(l.numero).replace(/\D/g, '')] = {
+            distCaserne: isFinite(Number(l.distCaserne)) ? Number(l.distCaserne) : NaN,
+            caserne: String(l.caserne || ''),
+            distSopfeu: isFinite(Number(l.distSopfeu)) ? Number(l.distSopfeu) : NaN,
+            baseSopfeu: String(l.baseSopfeu || '')
+          };
+        });
+        return { prime1000: Number(d.prime1000), prime500: Number(d.prime500), parLot: parLot,
+          valeur: isFinite(Number(d.valeur)) ? Number(d.valeur) : null,
+          introuvables: (Array.isArray(d.introuvables) ? d.introuvables : []).map(x => String(x).replace(/\D/g, '')) };
+      } catch(e){ return null; }
+    }
+
+    // ===== Fiche client COMBINÉE d'un dossier de lots =====
+    // Même présentation étagée que la fiche d'un lot (même
+    // planificateur, mêmes durées, même indicateur central, mêmes
+    // deux étapes de distances séparées) ; les superficies sont les
+    // SOMMES des résumés précalculés des lots (essences et reste
+    // fusionnés par nom et retriés, pourcentages recalculés sur le
+    // total combiné). Les distances se révèlent par étape, UNE ligne
+    // compacte par lot, dans l'ordre du dossier. La prime vient du
+    // mode multi de /prime (composition unique côté serveur).
+    async function afficherFicheClientCombinee(){
+      const dossier = selectionClient.slice();
+      if(dossier.length < 2) return;
+      const seq = ++seqFicheClient;
+      annulerRevel();
+      ouvrirBlocFicheClient(null);
+      titreFicheClient.textContent = 'Dossier de ' + dossier.length + ' lots';
+      if(blocFicheClient.scrollIntoView){
+        try { blocFicheClient.scrollIntoView({block: 'nearest'}); } catch(e){ /* confort seulement */ }
+      }
+      ficheClient.innerHTML = '';
+      const zone = document.createElement('div');
+      ficheClient.appendChild(zone);
+      const attente = document.createElement('div');
+      attente.className = 'attente-calcul';
+      ficheClient.appendChild(attente);
+      montrerIndicateurCalcul('Calcul en cours…');
+
+      const promessePrime = demanderPrimeClientMulti(dossier.map(sel => sel.chiffres));
+      const resumes = [];
+      let erreurDonnees = false;
+      try {
+        for(const sel of dossier){
+          const frag = await dechiffrerFragmentClient(sel.chiffres.slice(0, 2));
+          resumes.push({ sel: sel, resume: (frag && frag[sel.chiffres]) || null });
+        }
+      } catch(e){ erreurDonnees = true; }
+      if(seq !== seqFicheClient) return;
+      if(erreurDonnees){
+        cacherIndicateurCalcul();
+        attente.innerHTML = '⚠️ Données des lots injoignables pour le moment — réessaie dans un instant.';
+        return;
+      }
+      const avec = resumes.filter(x => x.resume);
+      if(!avec.length){
+        cacherIndicateurCalcul();
+        attente.innerHTML = 'Aucune donnée d\u2019inventaire disponible pour ces lots.';
+        return;
+      }
+      let lotHa = 0, couvertHa = 0;
+      const essMap = {}, rstMap = {};
+      avec.forEach(x => {
+        lotHa += x.resume.l || 0;
+        couvertHa += x.resume.c || 0;
+        for(const k in (x.resume.e || {})) essMap[k] = (essMap[k] || 0) + x.resume.e[k];
+        for(const k in (x.resume.r || {})) rstMap[k] = (rstMap[k] || 0) + x.resume.r[k];
+      });
+      const essences = Object.entries(essMap).sort((a, b) => b[1] - a[1]);
+      const restes = Object.entries(rstMap).sort((a, b) => b[1] - a[1]);
+      const boiseHa = essences.reduce((somme, kv) => somme + kv[1], 0);
+      // Même règle interne du boisé minimum, appliquée au boisé TOTAL
+      // combiné du dossier (arrondi à 2 décimales comme affiché).
+      const nonAssurable = Number(boiseHa.toFixed(2)) < 3;
+      const pct = (ha) => lotHa > 0 ? fmtNombre(100 * ha / lotHa, 1) + ' %' : '—';
+      const etapes = [];
+      let entete = 'Dossier de ' + dossier.length + ' lots<br>' +
+        dossier.map(sel => 'Lot <b>' + sel.numero + '</b>').join(' · ') +
+        '<br>Superficie totale des lots : <b>' + fmtNombre(lotHa, 2) + ' ha</b>';
+      const sans = resumes.filter(x => !x.resume);
+      if(sans.length){
+        entete += '<br><span style="color:#666">Sans données d\u2019inventaire (exclus des superficies) : ' +
+          sans.map(x => 'lot ' + x.sel.numero).join(', ') + '.</span>';
+      }
+      etapes.push(entete);
+      essences.forEach(([nom, ha], i) => {
+        etapes.push((i === 0 ? '<div class="titre-section">Superficie boisée par essence dominante</div>' : '') +
+          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+      });
+      restes.forEach(([nom, ha], i) => {
+        etapes.push((i === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+      });
+      const nonClasse = lotHa - couvertHa;
+      if(nonClasse > 0.005){
+        etapes.push((restes.length === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+          '<div class="ligne-detail"><span>Non classé par l\u2019inventaire forestier</span><span class="val"><b>' +
+          fmtNombre(nonClasse, 2) + ' ha</b> · ' + pct(nonClasse) + '</span></div>');
+      }
+      etapes.push('<div class="total-client">Superficie boisée : ' + fmtNombre(boiseHa, 2) +
+        ' ha (' + pct(boiseHa) + ' du dossier)</div>' +
+        '<p class="mention-cad">Superficies indicatives, calculées à partir de l\u2019inventaire écoforestier du MRNF et du cadastre du Québec. Les chemins ne sont cartographiés qu\u2019en partie dans l\u2019inventaire forestier.</p>');
+
+      const plan = planifierSequence(etapes.length);
+      let instant = plan.dureeCalcul;
+      etapes.forEach((htmlEtape, idx) => {
+        if(idx > 0) instant += plan.ecarts[idx - 1];
+        const t = setTimeout(() => {
+          if(seq !== seqFicheClient) return;
+          const div = document.createElement('div');
+          div.className = 'ligne-revelee';
+          div.innerHTML = htmlEtape;
+          zone.appendChild(div);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+        }, instant);
+        minuteursRevel.push(t);
+      });
+      const tPrime = setTimeout(async () => {
+        if(seq !== seqFicheClient) return;
+        const prime = await promessePrime;
+        if(seq !== seqFicheClient) return;
+        const patienter = (ms) => new Promise(res => { minuteursRevel.push(setTimeout(res, ms)); });
+        // Lignes de distances PAR LOT, dans l'ordre du dossier ; une
+        // étape ne joue que si au moins un lot a la distance.
+        const lignesDist = (champ, etiquette) => dossier.map(sel => {
+          const l = prime && prime.parLot[sel.chiffres];
+          if(!l || !isFinite(l[champ])) return null;
+          return 'Lot ' + sel.numero + ' — ' + etiquette + ' : <b>' + fmtNombre(l[champ], 1) + ' km</b>';
+        }).filter(Boolean);
+        const lignesCaserne = lignesDist('distCaserne', 'caserne');
+        const lignesSopfeu = lignesDist('distSopfeu', 'base SOPFEU');
+        let resteDist = plan.dureeDist;
+        // Comme pour un lot seul : la pastille centrale porte seule
+        // les libellés « Recherche de… » (plus de ligne grise dans la
+        // fiche) ; les résultats par lot sont ajoutés à la fin de
+        // chaque attente, directement.
+        if(lignesCaserne.length){
+          montrerIndicateurCalcul('Recherche de la caserne de pompiers…');
+          await patienter(plan.dureeDistCaserne);
+          if(seq !== seqFicheClient) return;
+          const divDist = document.createElement('div');
+          divDist.className = 'ligne-revelee';
+          divDist.innerHTML = lignesCaserne.map(t => '<p class="dist-client">' + t + '</p>').join('');
+          zone.appendChild(divDist);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+          resteDist -= plan.dureeDistCaserne;
+        }
+        if(lignesSopfeu.length){
+          montrerIndicateurCalcul('Recherche de la base SOPFEU…');
+          await patienter(plan.dureeDistSopfeu);
+          if(seq !== seqFicheClient) return;
+          const divDist = document.createElement('div');
+          divDist.className = 'ligne-revelee';
+          divDist.innerHTML = lignesSopfeu.map(t => '<p class="dist-client">' + t + '</p>').join('');
+          zone.appendChild(divDist);
+          ficheClient.scrollTop = ficheClient.scrollHeight;
+          resteDist -= plan.dureeDistSopfeu;
+        }
+        montrerIndicateurCalcul('Calcul de la prime…');
+        await patienter(plan.dureePrime + resteDist);
+        if(seq !== seqFicheClient) return;
+        await patienter(plan.dureeAvantPrime);
+        if(seq !== seqFicheClient) return;
+        const div = document.createElement('div');
+        div.className = 'ligne-revelee';
+        if(nonAssurable){
+          div.innerHTML = '<p class="avis-non-assurable">Propriété non assurable</p>';
+          zone.appendChild(div);
+        } else if(prime){
+          div.innerHTML = htmlPrimeClient(prime);
+          zone.appendChild(div);
+          if(prime.introuvables.length){
+            const noms = prime.introuvables.map(ch => {
+              const sel = dossier.find(x => x.chiffres === ch);
+              return sel ? sel.numero : ch;
+            });
+            const note = document.createElement('p');
+            note.className = 'mention-cad';
+            note.textContent = 'Prime calculée sans les lots ' + noms.join(', ') + ' (absents des données de calcul du serveur).';
+            zone.appendChild(note);
+          }
+          if(isFinite(prime.valeur)){
+            // Dernière révélation du dossier : la valeur estimée
+            // totale du bois, juste après la prime (court délai).
+            const tValeur = setTimeout(() => {
+              if(seq !== seqFicheClient) return;
+              const divV = document.createElement('div');
+              divV.className = 'ligne-revelee';
+              divV.innerHTML = htmlValeurClient(prime.valeur, true);
+              zone.appendChild(divV);
+              ficheClient.scrollTop = ficheClient.scrollHeight;
+            }, 1200);
+            minuteursRevel.push(tValeur);
+          }
+          let minuteurRecalcul = null;
+          div.querySelectorAll('input[name="franchise-client"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+              const montant = div.querySelector('.prime-montant');
+              if(!montant) return;
+              if(minuteurRecalcul) clearTimeout(minuteurRecalcul);
+              montant.innerHTML = '<span class="prime-recalcul">Recalcul de la prime…</span>';
+              montrerIndicateurCalcul('Recalcul de la prime…');
+              const choix = radio.value;
+              minuteurRecalcul = setTimeout(() => {
+                if(seq !== seqFicheClient) return;
+                montant.textContent = fmtNombre(choix === '500' ? prime.prime500 : prime.prime1000, 0) + ' $ / an';
+                cacherIndicateurCalcul();
+              }, DELAI_RECALCUL_MIN_MS + Math.random() * (DELAI_RECALCUL_MAX_MS - DELAI_RECALCUL_MIN_MS));
+              minuteursRevel.push(minuteurRecalcul);
+            });
+          });
+        } else {
+          div.innerHTML = '<p class="prime-consulter">Prime : nous consulter.</p>';
+          zone.appendChild(div);
+        }
+        attente.remove();
+        cacherIndicateurCalcul();
+        ficheClient.scrollTop = ficheClient.scrollHeight;
+      }, instant + plan.ecarts[plan.ecarts.length - 1]);
+      minuteursRevel.push(tPrime);
+    }
+  }
+
+  // ===== Carte (identique à la version ouverte, données déchiffrées) =====
+  function initCarte(){
+    const rendu = L.canvas({padding: 0.5});
+    const carte = L.map('map', {renderer: rendu});
+    carteGlobale = carte; // pour que le bandeau réductible force invalidateSize
+    carte.attributionControl.setPrefix('© 2026 Frédéric Waltzing — Tous droits réservés');
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(carte);
+    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:18});
+    L.control.layers({'Plan':osm,'Satellite':sat}, null, {position:'topleft'}).addTo(carte);
+    carte.fitBounds([[47.99,-74.02],[49.15,-69.97]]);
+    document.getElementById('map').addEventListener('contextmenu', e => e.preventDefault());
+
+    let dernierCalculLot = null;
+    let distancesLotActuel = null; // distances incendie du lot ouvert (serveur)
+    let selectionProprio = []; // sélection multiple de lots (dossier)
+    let dernierDossierLot = null; // dossier ouvert {calc, details} ou null
+
+    // ===== Cadastre du Québec (MRNF) : donnée PUBLIQUE servie EN DIRECT par le
+    // service cartographique du gouvernement du Québec. Rien n'est chiffré ni
+    // hébergé ici : affichage par « export » d'images du MapServer officiel et
+    // recherche attributaire sur le champ NO_LOT de la même couche. Ces
+    // contrôles n'existent qu'après déverrouillage (panneau construit ici).
+    const ZOOM_CADASTRE = 15; // produit officiel : affichage à partir du 1:30 000 (vérifié : vide au zoom 14, rendu au zoom 15)
+    const SVC_CADASTRE = 'https://geo.environnement.gouv.qc.ca/donnees/rest/services/Reference/Cadastre_allege/MapServer';
+    const FENETRE_SLSJ = {geometry:'-73.6,47.7,-69.9,50.1', geometryType:'esriGeometryEnvelope',
+      inSR:'4326', spatialRel:'esriSpatialRelIntersects'};
+    carte.createPane('panneauCadastre');
+    carte.getPane('panneauCadastre').style.zIndex = 450;
+
+    const CoucheCadastre = L.GridLayer.extend({
+      createTile: function(coords, fini){
+        const img = document.createElement('img');
+        img.alt = '';
+        if(coords.z < ZOOM_CADASTRE){ fini(null, img); return img; }
+        const taille = this.getTileSize();
+        const pNO = coords.scaleBy(taille);
+        const pSE = pNO.add(taille);
+        const no = carte.unproject(pNO, coords.z);
+        const se = carte.unproject(pSE, coords.z);
+        img.onload = () => fini(null, img);
+        img.onerror = () => fini(null, img); // service injoignable : tuile vide, jamais de plantage
+        img.src = SVC_CADASTRE + '/export?bbox=' + [no.lng, se.lat, se.lng, no.lat].join(',') +
+          '&bboxSR=4326&imageSR=3857&size=' + taille.x + ',' + taille.y +
+          '&format=png32&transparent=true&layers=show:0&f=image';
+        return img;
+      }
+    });
+    const coucheCadastre = new CoucheCadastre({pane:'panneauCadastre'});
+    const coucheSurlignage = L.geoJSON(null, {pane:'panneauCadastre',
+      style:{color:'#E8A33D', weight:4, fillColor:'#E8A33D', fillOpacity:.08}});
+    coucheSurlignage.addTo(carte);
+
+    // Colonne de panneaux (haut à gauche) : cadastre, fiche de lot et légende
+    // empilés dans UNE seule colonne — chaque bloc se réduit à sa barre de
+    // titre, donc les panneaux ne se chevauchent jamais, même sur téléphone.
+    const ctrlCol = L.control({position:'topright'});
+    ctrlCol.onAdd = () => {
+      const d = L.DomUtil.create('div', 'colonne-panneaux');
+      d.innerHTML =
+        '<div class="bloc-panneau panneau-cad" id="bloc-cadastre">' +
+          '<div class="entete-bloc" id="entete-cadastre">' +
+            '<label for="coche-cadastre"><input type="checkbox" id="coche-cadastre" checked> Cadastre (lots)</label>' +
+            '<button type="button" class="bascule-bloc" id="bascule-cad" aria-label="Réduire ou déployer le panneau Cadastre">−</button>' +
+          '</div>' +
+          '<p class="mention-cad" id="astuce-cad"></p>' +
+          '<div class="corps corps-bloc" id="corps-cad">' +
+            '<input type="text" id="champ-lot" inputmode="numeric" autocomplete="off" aria-label="Recherche par numéro de lot" placeholder="🔎 Nº de lot (ex. : 3 996 745)">' +
+            '<ul id="liste-lots"></ul>' +
+            '<p id="msg-lot"></p>' +
+            '<div id="selection-proprio"></div>' +
+            '<p class="mention-cad">Limites de lots à titre indicatif seulement — seul un arpenteur-géomètre peut établir une limite légale. Source : Cadastre du Québec (MRNF), service en direct.</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bloc-panneau" id="bloc-fiche">' +
+          '<div class="entete-bloc" id="entete-fiche">' +
+            '<span class="titre-bloc" id="titre-fiche-bloc">Fiche du lot</span>' +
+            '<button type="button" class="bascule-bloc" id="bascule-fiche" aria-label="Réduire ou déployer la fiche du lot">−</button>' +
+          '</div>' +
+          '<div class="corps-bloc" id="fiche-lot"></div>' +
+        '</div>' +
+        '<div class="bloc-panneau" id="bloc-legende">' +
+          '<div class="entete-bloc" id="entete-legende">' +
+            '<span class="titre-bloc">Prédisposition au feu</span>' +
+            '<button type="button" class="bascule-bloc" id="bascule-legende" aria-label="Réduire ou déployer la légende">−</button>' +
+          '</div>' +
+          '<div class="corps-bloc legende" id="corps-legende">' +
+            construireLegendeHtml(roleSession, tauxActuels()).replace('<b>Prédisposition au feu</b><br>', '') +
+          '</div>' +
+        '</div>';
+      L.DomEvent.disableClickPropagation(d);
+      L.DomEvent.disableScrollPropagation(d);
+      protegerClicsPanneau(d);
+      // Au doigt, le geste doit défiler LA COLONNE, pas la carte —
+      // sinon le bas de la fiche (les montants) reste inatteignable.
+      d.addEventListener('touchmove', (e) => { e.stopPropagation(); }, {passive:true});
+      d.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+      // Hauteur calée sur la carte : la colonne (en haut à droite, dans
+      // l'espace libéré par le choix de carte passé à gauche) descend
+      // jusqu'à ~40 px du bas de la carte, au-dessus des crédits.
+      const ajusterHauteurColonne = () => {
+        d.style.maxHeight = Math.max(200, carte.getSize().y - 40) + 'px';
+      };
+      ajusterHauteurColonne();
+      carte.on('resize', ajusterHauteurColonne);
+      return d;
+    };
+    ctrlCol.addTo(carte);
+
+    const cocheCad = document.getElementById('coche-cadastre');
+    // Case « Cadastre (lots) » cochée par défaut (demande de Frédéric,
+    // 2026-11-11) : la couche est ajoutée dès l'ouverture de l'espace.
+    // Elle ne dessine rien sous le zoom 15 (tuiles vides) et l'astuce
+    // de zoom rappelle au besoin de zoomer pour voir les lots.
+    coucheCadastre.addTo(carte);
+    // Astuce de zoom DIFFÉRÉE : majAstuceCad lit des constantes déclarées
+    // plus bas dans cette fonction (astuceCad) ; l'appeler ici, tout de
+    // suite, plante le reste de la construction de l'espace (piège TDZ,
+    // vécu le 2026-11-11 : case du cadastre sans effet, clics de lots
+    // morts). Le setTimeout laisse la fonction se terminer d'abord.
+    setTimeout(() => { try { majAstuceCad(); } catch(e){} }, 0);
+    const champLot = document.getElementById('champ-lot');
+    const listeLots = document.getElementById('liste-lots');
+    const msgLot = document.getElementById('msg-lot');
+    const ficheLot = document.getElementById('fiche-lot');
+    const astuceCad = document.getElementById('astuce-cad');
+    const corpsCad = document.getElementById('corps-cad');
+    const basculeCad = document.getElementById('bascule-cad');
+    const corpsLegende = document.getElementById('corps-legende');
+    const basculeLegende = document.getElementById('bascule-legende');
+    const basculeFiche = document.getElementById('bascule-fiche');
+    const blocFiche = document.getElementById('bloc-fiche');
+    const titreFicheBloc = document.getElementById('titre-fiche-bloc');
+
+    // ===== Panneaux réductibles : chaque bloc se replie sur sa barre de
+    // titre (bouton − / + de 42 px, ou tap sur l'entête hors éléments
+    // interactifs). Réduit = seule la barre reste, un tap la redéploie. =====
+    function basculerCorps(corps, bouton){
+      const ferme = corps.classList.toggle('ferme');
+      if(bouton) bouton.textContent = ferme ? '+' : '−';
+      return ferme;
+    }
+    function replierCorps(corps, bouton){
+      corps.classList.add('ferme');
+      if(bouton) bouton.textContent = '+';
+    }
+    function deplierCorps(corps, bouton){
+      corps.classList.remove('ferme');
+      if(bouton) bouton.textContent = '−';
+    }
+    function enteteBascule(idEntete, corps, bouton, ignorer){
+      document.getElementById(idEntete).addEventListener('click', (e) => {
+        if(e.target.closest(ignorer)) return;
+        basculerCorps(corps, bouton);
+      });
+    }
+    basculeCad.addEventListener('click', () => basculerCorps(corpsCad, basculeCad));
+    basculeLegende.addEventListener('click', () => basculerCorps(corpsLegende, basculeLegende));
+    basculeFiche.addEventListener('click', () => basculerCorps(ficheLot, basculeFiche));
+    enteteBascule('entete-cadastre', corpsCad, basculeCad, 'label, input, button');
+    enteteBascule('entete-legende', corpsLegende, basculeLegende, 'button, input');
+    enteteBascule('entete-fiche', ficheLot, basculeFiche, 'button');
+
+    // Sur téléphone, le panneau cadastre démarre replié : sa barre de titre
+    // (avec la case à cocher) reste visible, la recherche s'ouvre en un geste.
+    if(window.matchMedia && window.matchMedia('(max-width: 640px)').matches){
+      replierCorps(corpsCad, basculeCad);
+    }
+
+    // Champs de taux de la légende (propriétaire seulement — les champs
+    // n'existent dans le HTML que pour ce rôle) : toute modification
+    // recalcule instantanément la fiche de lot ouverte.
+    if(roleEstProprietaire(roleSession)){
+      document.querySelectorAll('#corps-legende input.taux').forEach(inp => inp.addEventListener('input', () => {
+        const t = tauxActuels();
+        const v = parseFloat(String(inp.value).replace(',', '.'));
+        t[inp.dataset.classe] = (isFinite(v) && v >= 0) ? v : 0;
+        enregistrerTaux(t);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      }));
+    }
+
+    // Réglage « Ajout franchise 500 $ » dans la légende (propriétaire
+    // seulement) : pourcentage ajouté à la prime quand la franchise de
+    // 500 $ est choisie dans la fiche (défaut 10 %, persisté sur l'appareil).
+    if(roleEstProprietaire(roleSession)){
+      const divFr = document.createElement('div');
+      divFr.innerHTML = '<span class="taux-lot">Ajout franchise 500 $ : <input type="number" class="franchise-ajout" min="0" step="1" value="' +
+        franchiseActuelle().ajout + '" aria-label="Ajout de prime pour la franchise de 500 $"> %</span>';
+      corpsLegende.appendChild(divFr);
+      divFr.querySelector('input.franchise-ajout').addEventListener('input', (e) => {
+        const f = franchiseActuelle();
+        const v = parseFloat(String(e.target.value).replace(',', '.'));
+        f.ajout = (isFinite(v) && v >= 0) ? v : 0;
+        enregistrerFranchise(f);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      });
+    }
+
+    // Réglages « distances incendie » dans la légende (propriétaire
+    // seulement) : % de majoration de la prime par kilomètre entamé
+    // pour la distance à la caserne, et par bond de 5 km pour celle à
+    // la base SOPFEU. Persistés sur
+    // l'appareil et poussés au serveur comme les taux (la prime des
+    // clients en tient compte).
+    if(roleEstProprietaire(roleSession)){
+      const divMajo = document.createElement('div');
+      const m0 = majoActuelle();
+      divMajo.innerHTML = '<span class="taux-lot">Distance caserne : <input type="number" class="majo-caserne" min="0" step="0.5" value="' +
+        m0.caserne + '" aria-label="Majoration par kilomètre entamé — distance à la caserne"> % / km entamé</span><br>' +
+        '<span class="taux-lot">Distance SOPFEU : <input type="number" class="majo-sopfeu" min="0" step="0.5" value="' +
+        m0.sopfeu + '" aria-label="Majoration par bond de 5 km — distance à la base SOPFEU"> % / bond de 5 km</span>';
+      corpsLegende.appendChild(divMajo);
+      const majoListener = () => {
+        const mm = majoActuelle();
+        const vc = parseFloat(String(divMajo.querySelector('input.majo-caserne').value).replace(',', '.'));
+        const vs = parseFloat(String(divMajo.querySelector('input.majo-sopfeu').value).replace(',', '.'));
+        mm.caserne = (isFinite(vc) && vc >= 0 && vc <= 100) ? vc : 0;
+        mm.sopfeu = (isFinite(vs) && vs >= 0 && vs <= 100) ? vs : 0;
+        enregistrerMajo(mm);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      };
+      divMajo.querySelector('input.majo-caserne').addEventListener('input', majoListener);
+      divMajo.querySelector('input.majo-sopfeu').addEventListener('input', majoListener);
+    }
+
+    // Réglages « ouverture de dossier » et « coût minimum » dans la
+    // légende (propriétaire seulement) : montants en $, persistés sur
+    // l'appareil et poussés au serveur comme les taux. Le coût minimum
+    // s'applique à la prime calculée, puis l'ouverture de dossier
+    // s'ajoute (jamais absorbée par le plancher).
+    if(roleEstProprietaire(roleSession)){
+      const divFrais = document.createElement('div');
+      const f0 = fraisActuels();
+      divFrais.innerHTML = '<span class="taux-lot">Ouverture de dossier : <input type="number" class="frais-ouverture" min="0" step="1" value="' +
+        f0.ouverture + '" aria-label="Frais d\u2019ouverture de dossier, en dollars"> $</span><br>' +
+        '<span class="taux-lot">Coût minimum : <input type="number" class="frais-minimum" min="0" step="1" value="' +
+        f0.minimum + '" aria-label="Coût minimum de la prime, en dollars"> $</span>';
+      corpsLegende.appendChild(divFrais);
+      const fraisListener = () => {
+        const ff = fraisActuels();
+        const vo = parseFloat(String(divFrais.querySelector('input.frais-ouverture').value).replace(',', '.'));
+        const vm = parseFloat(String(divFrais.querySelector('input.frais-minimum').value).replace(',', '.'));
+        ff.ouverture = (isFinite(vo) && vo >= 0) ? vo : 0;
+        ff.minimum = (isFinite(vm) && vm >= 0) ? vm : 0;
+        enregistrerFrais(ff);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      };
+      divFrais.querySelector('input.frais-ouverture').addEventListener('input', fraisListener);
+      divFrais.querySelector('input.frais-minimum').addEventListener('input', fraisListener);
+    }
+
+    // Section repliable « Valeur du bois » dans la légende
+    // (propriétaire seulement) : choix de la BASE de prime (« Par
+    // classe ($/ha) » — défaut, comportement historique — ou « Par
+    // valeur (%) »), pourcentage de prime sur la valeur, et prix de
+    // référence par groupe d'essences ($/ha, peuplement mature et
+    // dense). Persistés sur l'appareil (risquefeu.valeur.v1) et
+    // poussés au serveur comme les taux : la prime client et la
+    // valeur affichée aux clients utilisent les mêmes réglages.
+    if(roleEstProprietaire(roleSession)){
+      const divValeur = document.createElement('div');
+      const v0 = valeurActuelle();
+      let champsPrix = '';
+      for(const g of GROUPES_VALEUR){
+        champsPrix += '<span class="taux-lot">' + g + ' : <input type="number" class="prix-valeur" data-groupe="' + g +
+          '" min="0" step="50" value="' + v0.prix[g] + '" aria-label="Prix de référence du groupe ' + g + ', en dollars par hectare"> $/ha</span><br>';
+      }
+      divValeur.innerHTML = '<details class="section-valeur"><summary><b>Valeur du bois</b></summary>' +
+        '<span class="taux-lot">Base de prime : ' +
+        '<label><input type="radio" name="base-prime" value="classe"' + (v0.base === 'classe' ? ' checked' : '') + '> Par classe ($/ha)</label> ' +
+        '<label><input type="radio" name="base-prime" value="valeur"' + (v0.base === 'valeur' ? ' checked' : '') + '> Par valeur (%)</label></span><br>' +
+        '<span class="taux-lot">Prime sur la valeur : <input type="number" class="pct-valeur" min="0" step="0.1" value="' +
+        v0.pct + '" aria-label="Prime sur la valeur, en pourcentage"> %</span><br>' +
+        '<span class="note-taux">prix de référence par groupe d\u2019essences ($/ha — peuplement mature et dense)</span><br>' +
+        champsPrix +
+        '<span class="note-taux">Prix : liste provisoire 2026 — Syndicat des producteurs de bois du SLSJ (spbsaglac.qc.ca) ; peuplier : PrixBois.ca.</span>' +
+        '</details>';
+      corpsLegende.appendChild(divValeur);
+      const valeurListener = () => {
+        const v = valeurActuelle();
+        divValeur.querySelectorAll('input.prix-valeur').forEach(inp => {
+          const x = parseFloat(String(inp.value).replace(',', '.'));
+          v.prix[inp.dataset.groupe] = (isFinite(x) && x >= 0) ? x : 0;
+        });
+        const xp = parseFloat(String(divValeur.querySelector('input.pct-valeur').value).replace(',', '.'));
+        v.pct = (isFinite(xp) && xp >= 0 && xp <= 100) ? xp : 0;
+        const rb = divValeur.querySelector('input[name="base-prime"]:checked');
+        v.base = (rb && rb.value === 'valeur') ? 'valeur' : 'classe';
+        enregistrerValeur(v);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      };
+      divValeur.querySelectorAll('input.prix-valeur').forEach(inp => inp.addEventListener('input', valeurListener));
+      divValeur.querySelector('input.pct-valeur').addEventListener('input', valeurListener);
+      divValeur.querySelectorAll('input[name="base-prime"]').forEach(inp => inp.addEventListener('change', valeurListener));
+    }
+
+    // Ouverture de la fiche de lot : son bloc apparaît déployé et, sur
+    // téléphone, les deux autres blocs se réduisent automatiquement pour
+    // lui laisser la place — la fiche défile dans son bloc si elle est longue.
+    function ouvrirBlocFiche(numero){
+      titreFicheBloc.textContent = numero ? 'Lot ' + numero : 'Fiche du lot';
+      blocFiche.style.display = 'block';
+      deplierCorps(ficheLot, basculeFiche);
+      if(window.matchMedia && window.matchMedia('(max-width: 640px)').matches){
+        replierCorps(corpsCad, basculeCad);
+        replierCorps(corpsLegende, basculeLegende);
+      }
+    }
+    function fermerBlocFiche(){
+      blocFiche.style.display = 'none';
+      titreFicheBloc.textContent = 'Fiche du lot';
+    }
+
+    function majAstuceCad(){
+      astuceCad.textContent = (cocheCad.checked && carte.getZoom() < ZOOM_CADASTRE)
+        ? 'Zoome à ' + ZOOM_CADASTRE + ' et + : les lots ne s\u2019affichent qu\u2019à partir de l\u2019échelle 1:30 000.'
+        : '';
+    }
+    cocheCad.addEventListener('change', () => {
+      if(cocheCad.checked) coucheCadastre.addTo(carte);
+      else carte.removeLayer(coucheCadastre);
+      majAstuceCad();
+    });
+    carte.on('zoomend', majAstuceCad);
+
+    async function requeteCadastre(params){
+      const u = new URL(SVC_CADASTRE + '/0/query');
+      u.search = new URLSearchParams(Object.assign({f:'json'}, params)).toString();
+      const r = await fetch(u);
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if(d.error) throw new Error(d.error.message || 'erreur du service');
+      return d;
+    }
+
+    // Les numéros officiels sont stockés avec espaces (« 3 996 745 ») : à
+    // partir des seuls chiffres tapés, on reconstruit les motifs « commence
+    // par » possibles selon la longueur totale du numéro (4 à 8 chiffres).
+    function motifsPrefixe(chiffres){
+      const motifs = new Set();
+      for(const L of [4,5,6,7,8]){
+        if(L < chiffres.length) continue;
+        let m = '';
+        for(let i = 0; i < chiffres.length; i++){
+          m += chiffres[i];
+          const places = i + 1;
+          if(places < chiffres.length && (L - places) % 3 === 0) m += ' ';
+        }
+        motifs.add(m + '%');
+      }
+      motifs.add(chiffres + '%');
+      return [...motifs];
+    }
+
+    let minuteurLot = null, seqLot = 0;
+    champLot.addEventListener('input', () => {
+      clearTimeout(minuteurLot);
+      const chiffres = champLot.value.replace(/\D/g, '');
+      listeLots.innerHTML = '';
+      if(chiffres.length < 3){
+        msgLot.textContent = chiffres.length ? 'Continue : 3 chiffres minimum pour chercher.' : '';
+        return;
+      }
+      msgLot.textContent = 'Recherche des lots commençant par ' + chiffres + '…';
+      minuteurLot = setTimeout(() => chercherLots(chiffres), 300);
+    });
+
+    async function chercherLots(chiffres){
+      const seq = ++seqLot;
+      try {
+        const where = '(' + motifsPrefixe(chiffres).map(m => "NO_LOT LIKE '" + m + "'").join(' OR ') + ')';
+        const d = await requeteCadastre(Object.assign({}, FENETRE_SLSJ, {
+          where, outFields:'NO_LOT', returnGeometry:'false',
+          orderByFields:'NO_LOT', resultRecordCount:'10', outSR:'4326'}));
+        if(seq !== seqLot) return; // réponse périmée (frappes plus récentes)
+        const numeros = [...new Set((d.features || []).map(f => f.attributes.NO_LOT))];
+        listeLots.innerHTML = '';
+        if(!numeros.length){
+          msgLot.textContent = 'Aucun lot trouvé dans la région pour ces chiffres.';
+          return;
+        }
+        msgLot.textContent = 'Lots trouvés — touche un numéro pour zoomer dessus :';
+        for(const n of numeros){
+          const li = document.createElement('li');
+          li.textContent = 'Lot ' + n;
+          li.addEventListener('click', () => choisirLot(n));
+          listeLots.appendChild(li);
+        }
+      } catch(e){
+        if(seq !== seqLot) return;
+        listeLots.innerHTML = '';
+        msgLot.textContent = '⚠️ Service du cadastre injoignable pour le moment — réessaie dans un instant.';
+      }
+    }
+
+    // ===== Sélection multiple de lots (dossier) — rôles propriétaires =====
+    // Même modèle que l'espace client : toucher ajoute, retoucher
+    // retire, chaque lot garde son surlignage, la liste vit dans le
+    // panneau Cadastre et, dès 2 lots, le bouton « Voir la fiche des
+    // N lots » ouvre la fiche détaillée du dossier. À 1 seul lot, la
+    // fiche détaillée habituelle part. Le rôle associes garde son
+    // comportement d'origine (choisirLotAssocies, ci-dessous).
+    const boiteSelectionProprio = document.getElementById('selection-proprio');
+    function majSurbrillanceProprio(){
+      coucheSurlignage.clearLayers();
+      const feats = [];
+      selectionProprio.forEach(sel => sel.feats.forEach(f => feats.push(f)));
+      if(feats.length) coucheSurlignage.addData({type:'FeatureCollection', features:feats});
+    }
+    function rendreSelectionProprio(){
+      if(!boiteSelectionProprio) return;
+      if(!selectionProprio.length){ boiteSelectionProprio.innerHTML = ''; return; }
+      let h = '<div class="sel-titre">Lots sélectionnés (' + selectionProprio.length + ')</div>';
+      selectionProprio.forEach((sel, i) => {
+        h += '<div class="sel-item"><span>Lot ' + sel.numero + '</span>' +
+          '<button type="button" data-retirer-proprio="' + i + '">✕ Retirer</button></div>';
+      });
+      h += '<div class="sel-actions"><button type="button" id="sel-tout-effacer-proprio">Tout effacer</button>' +
+        '<button type="button" class="sel-voir" id="sel-lancer-proprio">Lancer la recherche' +
+        (selectionProprio.length >= 2 ? ' (' + selectionProprio.length + ' lots)' : '') + '</button></div>';
+      boiteSelectionProprio.innerHTML = h;
+      boiteSelectionProprio.querySelectorAll('[data-retirer-proprio]').forEach(b => {
+        b.addEventListener('click', () => retirerLotProprio(Number(b.getAttribute('data-retirer-proprio'))));
+      });
+      const be = document.getElementById('sel-tout-effacer-proprio');
+      if(be) be.addEventListener('click', effacerSelectionProprio);
+      const bl = document.getElementById('sel-lancer-proprio');
+      if(bl) bl.addEventListener('click', () => {
+        if(selectionProprio.length === 1) afficherFicheDetailleeLot(selectionProprio[0].numero, selectionProprio[0].feats);
+        else if(selectionProprio.length >= 2) afficherFicheDetailleeDossier();
+      });
+    }
+    function fermerFicheProprio(){
+      dernierCalculLot = null;
+      dernierDossierLot = null;
+      distancesLotActuel = null;
+      fermerBlocFiche();
+      ficheLot.innerHTML = '';
+    }
+    function retirerLotProprio(idx){
+      const retire = selectionProprio[idx];
+      if(!retire) return;
+      selectionProprio.splice(idx, 1);
+      majSurbrillanceProprio();
+      rendreSelectionProprio();
+      if(selectionProprio.length === 1){
+        const reste = selectionProprio[0];
+        msgLot.textContent = 'Lot ' + retire.numero + ' retiré de la sélection. Lot ' +
+          reste.numero + ' surligné en jaune sur la carte — touchez « Lancer la recherche » pour afficher sa fiche.';
+      } else if(selectionProprio.length === 0){
+        fermerFicheProprio();
+        msgLot.textContent = 'Sélection effacée.';
+      } else {
+        // Fiche affichée conservée telle quelle ; elle sera remplacée
+        // au prochain « Lancer la recherche ».
+        msgLot.textContent = 'Lot ' + retire.numero + ' retiré — ' + selectionProprio.length +
+          ' lots sélectionnés. Touchez « Lancer la recherche » pour relancer avec cette sélection.';
+      }
+    }
+    function effacerSelectionProprio(){
+      effacerSelectionLot();
+      msgLot.textContent = 'Sélection effacée.';
+    }
+    async function choisirLotProprio(numero, depuisCarte){
+      listeLots.innerHTML = '';
+      const chiffresNouveau = numero.replace(/\D/g, '');
+      const idxExistant = selectionProprio.findIndex(sel => sel.chiffres === chiffresNouveau);
+      if(idxExistant >= 0){ retirerLotProprio(idxExistant); return; }
+      msgLot.textContent = 'Localisation du lot ' + numero + '…';
+      try {
+        const d = await requeteCadastre(Object.assign({}, FENETRE_SLSJ, {
+          where: "NO_LOT = '" + numero.replace(/'/g, "''") + "'",
+          outFields:'NO_LOT', returnGeometry:'true', outSR:'4326', f:'geojson'}));
+        const feats = d.features || [];
+        if(!feats.length){
+          msgLot.textContent = 'Lot ' + numero + ' introuvable dans la région.';
+          return;
+        }
+        if(!cocheCad.checked){
+          cocheCad.checked = true;
+          coucheCadastre.addTo(carte);
+        }
+        selectionProprio.push({ numero: numero, chiffres: chiffresNouveau, feats: feats });
+        majSurbrillanceProprio();
+        if(!depuisCarte){
+          const limites = L.geoJSON({type:'FeatureCollection', features:feats}).getBounds();
+          const z = Math.max(Math.min(carte.getBoundsZoom(limites), 17), ZOOM_CADASTRE);
+          carte.flyTo(limites.getCenter(), z);
+        }
+        majAstuceCad();
+        rendreSelectionProprio();
+        // Comme côté client : la sélection n'affiche rien toute seule ;
+        // le bouton « Lancer la recherche » démarre la fiche.
+        if(selectionProprio.length === 1){
+          msgLot.textContent = 'Lot ' + numero + ' surligné en jaune sur la carte — touchez « Lancer la recherche » pour afficher sa fiche.';
+        } else {
+          msgLot.textContent = 'Lot ' + numero + ' ajouté — ' + selectionProprio.length +
+            ' lots sélectionnés. Touchez « Lancer la recherche » pour afficher la fiche du dossier.';
+        }
+      } catch(e){
+        msgLot.textContent = '⚠️ Service du cadastre injoignable pour le moment — réessaie dans un instant.';
+      }
+    }
+    async function choisirLot(numero, depuisCarte){
+      if(roleEstProprietaire(roleSession)) return choisirLotProprio(numero, depuisCarte);
+      return choisirLotAssocies(numero, depuisCarte);
+    }
+
+    async function choisirLotAssocies(numero, depuisCarte){
+      listeLots.innerHTML = '';
+      msgLot.textContent = 'Localisation du lot ' + numero + '…';
+      try {
+        const d = await requeteCadastre(Object.assign({}, FENETRE_SLSJ, {
+          where: "NO_LOT = '" + numero.replace(/'/g, "''") + "'",
+          outFields:'NO_LOT', returnGeometry:'true', outSR:'4326', f:'geojson'}));
+        const feats = d.features || [];
+        if(!feats.length){
+          msgLot.textContent = 'Lot ' + numero + ' introuvable dans la région.';
+          return;
+        }
+        if(!cocheCad.checked){
+          cocheCad.checked = true;
+          coucheCadastre.addTo(carte);
+        }
+        coucheSurlignage.clearLayers();
+        coucheSurlignage.addData({type:'FeatureCollection', features:feats});
+        const limites = coucheSurlignage.getBounds();
+        // Sélection depuis la RECHERCHE : on vole jusqu'au lot. Depuis un
+        // TOUCHER sur la carte (depuisCarte) : aucun déplacement — le lot
+        // est déjà sous les yeux, on le surligne et la fiche part.
+        if(!depuisCarte){
+          const z = Math.max(Math.min(carte.getBoundsZoom(limites), 17), ZOOM_CADASTRE);
+          carte.flyTo(limites.getCenter(), z);
+        }
+        majAstuceCad();
+        if(roleEstProprietaire(roleSession)){
+          afficherFicheDetailleeLot(numero, feats);
+        } else {
+          // Rôle associes (ou rôle inconnu) : comportement inchangé —
+          // surlignage + mini-fiche numéro et superficie, rien de plus.
+          let aire = 0;
+          for(const f of feats) aire += aireGeodesiqueHa(f.geometry);
+          ouvrirBlocFiche(numero);
+          ficheLot.innerHTML = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
+            'Lot <b>' + numero + '</b><br>Superficie approximative : <b>' +
+            aire.toFixed(2).replace('.', ',') + ' ha</b> ' +
+            '<span style="color:#666">(calculée d\u2019après le polygone officiel)</span>';
+          document.getElementById('effacer-lot').addEventListener('click', () => {
+            coucheSurlignage.clearLayers();
+            fermerBlocFiche();
+            ficheLot.innerHTML = '';
+            msgLot.textContent = '';
+          });
+        }
+        msgLot.textContent = 'Lot ' + numero + ' surligné en jaune sur la carte.';
+      } catch(e){
+        msgLot.textContent = '⚠️ Service du cadastre injoignable pour le moment — réessaie dans un instant.';
+      }
+    }
+
+    // ===== Fiche détaillée de lot (propriétaire seulement) =====
+    let promesseLibIntersection = null;
+    function chargerLibIntersection(){
+      if(window.polygonClipping) return Promise.resolve();
+      if(promesseLibIntersection) return promesseLibIntersection;
+      promesseLibIntersection = new Promise((resol, rejet) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.min.js';
+        sc.onload = () => { window.polygonClipping ? resol() : rejet(new Error('bibliothèque absente')); };
+        sc.onerror = () => { promesseLibIntersection = null; rejet(new Error('CDN injoignable')); };
+        document.head.appendChild(sc);
+      });
+      return promesseLibIntersection;
+    }
+
+    function rendreFicheDossier(){
+      if(!dernierDossierLot) return;
+      ficheLot.innerHTML = htmlFicheDossierDetaillee(dernierDossierLot.calc, dernierDossierLot.details, tauxActuels(), franchiseActuelle());
+      const b = document.getElementById('effacer-lot');
+      if(b) b.addEventListener('click', effacerSelectionProprio);
+      const sel = document.getElementById('choix-franchise');
+      if(sel) sel.addEventListener('change', () => {
+        const f = franchiseActuelle();
+        f.choix = sel.value === '500' ? '500' : '1000';
+        enregistrerFranchise(f);
+        rendreFicheDossier();
+      });
+    }
+
+    // Fiche détaillée d'un DOSSIER : croisement de CHAQUE lot avec les
+    // peuplements (sommes par classe sur l'ensemble), distances
+    // demandées par lot, composition unique dans
+    // htmlFicheDossierDetaillee.
+    async function afficherFicheDetailleeDossier(){
+      const dossier = selectionProprio.slice();
+      if(dossier.length < 2) return;
+      dernierCalculLot = null;
+      dernierDossierLot = null;
+      distancesLotActuel = null;
+      ouvrirBlocFiche(null);
+      titreFicheBloc.textContent = 'Dossier de ' + dossier.length + ' lots';
+      ficheLot.innerHTML = 'Dossier de <b>' + dossier.length + ' lots</b> : ' +
+        dossier.map(sel => sel.numero).join(', ') +
+        '<br>Calcul en cours… (chargement des peuplements du secteur)';
+      const geomsTous = [];
+      dossier.forEach(sel => sel.feats.forEach(f => { if(f.geometry) geomsTous.push(f.geometry); }));
+      let bo = Infinity, bs = Infinity, be = -Infinity, bn = -Infinity;
+      for(const g of geomsTous){
+        const b = limitesGeom(g);
+        if(b[0] < bo) bo = b[0];
+        if(b[1] < bs) bs = b[1];
+        if(b[2] > be) be = b[2];
+        if(b[3] > bn) bn = b[3];
+      }
+      const peuplements = [];
+      const cellules = INDEX.cellules.filter(c =>
+        c.b[0] < be && c.b[2] > bo && c.b[1] < bn && c.b[3] > bs);
+      for(const c of cellules){
+        try { peuplements.push(...await chargerCellule(c)); } catch(e){ /* cellule illisible : ignorée */ }
+      }
+      majAffichage();
+      try {
+        await chargerLibIntersection();
+      } catch(e){
+        ficheLot.innerHTML = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
+          'Dossier de <b>' + dossier.length + ' lots</b><br>' +
+          '⚠️ Calcul de la fiche impossible : la bibliothèque de croisement n\u2019a pas pu être chargée (connexion). Les lots restent surlignés sur la carte.';
+        const b = document.getElementById('effacer-lot');
+        if(b) b.addEventListener('click', effacerSelectionProprio);
+        return;
+      }
+      const details = [];
+      const fusion = { lotHa: 0, couvertHa: 0, boiseHa: 0, parClasseHa: {}, parGroupePondHa: {}, scorePondere: 0, pctBoise: 0, nbTouches: 0, nbEchecs: 0 };
+      let scoreNum = 0;
+      for(const sel of dossier){
+        const geoms = sel.feats.map(f => f.geometry).filter(Boolean);
+        const c = croiserLot(geoms, peuplements);
+        details.push({ numero: sel.numero, parClasseHa: c.parClasseHa, parGroupePondHa: c.parGroupePondHa, dist: null });
+        fusion.lotHa += c.lotHa;
+        fusion.couvertHa += c.couvertHa;
+        fusion.boiseHa += c.boiseHa;
+        for(const cl in c.parClasseHa) fusion.parClasseHa[cl] = (fusion.parClasseHa[cl] || 0) + c.parClasseHa[cl];
+        for(const gr in (c.parGroupePondHa || {})) fusion.parGroupePondHa[gr] = (fusion.parGroupePondHa[gr] || 0) + c.parGroupePondHa[gr];
+        scoreNum += (c.scorePondere || 0) * c.couvertHa;
+        fusion.nbTouches += c.nbTouches;
+        fusion.nbEchecs += c.nbEchecs;
+      }
+      fusion.scorePondere = fusion.couvertHa > 0 ? scoreNum / fusion.couvertHa : 0;
+      fusion.pctBoise = fusion.lotHa > 0 ? 100 * fusion.boiseHa / fusion.lotHa : 0;
+      const ouvert = { calc: fusion, details: details };
+      dernierDossierLot = ouvert;
+      rendreFicheDossier();
+      // Distances incendie de CHAQUE lot, en parallèle ; la fiche se
+      // ré-affiche quand elles sont là (si le même dossier est ouvert).
+      await Promise.all(details.map(async d => { d.dist = await demanderDistancesLot(d.numero); }));
+      if(dernierDossierLot === ouvert) rendreFicheDossier();
+    }
+
+    function effacerSelectionLot(){
+      coucheSurlignage.clearLayers();
+      dernierCalculLot = null;
+      dernierDossierLot = null;
+      selectionProprio = [];
+      if(typeof rendreSelectionProprio === 'function') rendreSelectionProprio();
+      distancesLotActuel = null;
+      fermerBlocFiche();
+      ficheLot.innerHTML = '';
+      msgLot.textContent = '';
+    }
+
+    function rendreFicheDetaillee(){
+      if(dernierDossierLot){ rendreFicheDossier(); return; }
+      if(!dernierCalculLot) return;
+      ficheLot.innerHTML = htmlFicheLotDetaillee(dernierCalculLot, tauxActuels(), franchiseActuelle(), distancesLotActuel);
+      const b = document.getElementById('effacer-lot');
+      if(b) b.addEventListener('click', effacerSelectionLot);
+      const sel = document.getElementById('choix-franchise');
+      if(sel) sel.addEventListener('change', () => {
+        const f = franchiseActuelle();
+        f.choix = sel.value === '500' ? '500' : '1000';
+        enregistrerFranchise(f);
+        rendreFicheDetaillee();
+      });
+    }
+
+    async function afficherFicheDetailleeLot(numero, feats){
+      dernierCalculLot = null;
+      dernierDossierLot = null;
+      distancesLotActuel = null;
+      ouvrirBlocFiche(numero);
+      ficheLot.innerHTML = 'Lot <b>' + numero + '</b><br>Calcul en cours… (chargement des peuplements du secteur)';
+      const geomsLot = feats.map(f => f.geometry).filter(Boolean);
+      let bo = Infinity, bs = Infinity, be = -Infinity, bn = -Infinity;
+      for(const g of geomsLot){
+        const b = limitesGeom(g);
+        if(b[0] < bo) bo = b[0];
+        if(b[1] < bs) bs = b[1];
+        if(b[2] > be) be = b[2];
+        if(b[3] > bn) bn = b[3];
+      }
+      // S'assurer que les cellules de détail couvrant le lot sont chargées
+      // et déchiffrées, même si l'utilisateur n'a pas encore visité le secteur.
+      const peuplements = [];
+      const cellules = INDEX.cellules.filter(c =>
+        c.b[0] < be && c.b[2] > bo && c.b[1] < bn && c.b[3] > bs);
+      for(const c of cellules){
+        try { peuplements.push(...await chargerCellule(c)); } catch(e){ /* cellule illisible : ignorée */ }
+      }
+      majAffichage();
+      try {
+        await chargerLibIntersection();
+      } catch(e){
+        ficheLot.innerHTML = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
+          'Lot <b>' + numero + '</b><br>' +
+          '⚠️ Calcul de la fiche impossible : la bibliothèque de croisement n\u2019a pas pu être chargée (connexion). Le lot reste surligné sur la carte.';
+        const b = document.getElementById('effacer-lot');
+        if(b) b.addEventListener('click', effacerSelectionLot);
+        return;
+      }
+      const calc = croiserLot(geomsLot, peuplements);
+      calc.numero = numero;
+      dernierCalculLot = calc;
+      rendreFicheDetaillee();
+      // Distances incendie : demandées au serveur en parallèle de
+      // l'affichage ; quand elles arrivent, la fiche se ré-affiche avec
+      // les distances et la prime majorée (si le même lot est toujours
+      // ouvert).
+      demanderDistancesLot(numero).then(d => {
+        if(d && dernierCalculLot && dernierCalculLot.numero === numero){
+          distancesLotActuel = d;
+          rendreFicheDetaillee();
+        }
+      });
+    }
+
+    const etat = document.getElementById('etat');
+    const registreCellules = {};
+    let nbDetail = 0;
+    let apercuCharge = false;
+
+    let tsClicPeuplement = 0;
+    const coucheApercu = L.geoJSON(null, {
+      renderer: rendu,
+      style: f => ({color:'#ffffff',weight:.4,fillColor:COULEURS[f.properties.c]||'#999',fillOpacity:f.properties.c==='Non boisé'?.45:.78}),
+      onEachFeature: (f,l) => l.on('click', () => { tsClicPeuplement = Date.now(); afficherApercu(f.properties); })
+    });
+    const coucheDetail = L.geoJSON(null, {
+      renderer: rendu,
+      style: f => ({color:'#ffffff',weight:.6,fillColor:COULEURS[f.properties.c]||'#999',fillOpacity:f.properties.c==='Non boisé'?.45:.78}),
+      onEachFeature: (f,l) => l.on('click', () => { tsClicPeuplement = Date.now(); afficher(f.properties); })
+    });
+
+    function afficherApercu(p){
+      document.getElementById('fiche').innerHTML =
+        `<span class="classe" style="color:${COULEURS[p.c]}">${p.c}</span><br>` +
+        `<span style="color:#666">Vue d'ensemble — zoome à ${ZOOM_DETAIL} et + sur ce secteur pour charger la fiche complète du peuplement (score et raisons).</span>`;
+    }
+
+    function afficher(p){
+      const el = document.getElementById('fiche');
+      if(p.c === 'Non boisé'){
+        el.innerHTML = `<span class="classe">Non boisé</span><br>Superficie privée : ${p.ha} ha<br><span style="color:#666">Terrain sans couvert forestier classé (eau, dénudé, etc.) — hors calcul.</span>`;
+        return;
+      }
+      el.innerHTML =
+        `<span class="score" style="color:${COULEURS[p.c]}">${p.s}</span> <span style="color:#666">/ 100</span><br>` +
+        `<span class="classe" style="color:${COULEURS[p.c]}">${p.c}</span><br><br>` +
+        `Couvert : <b>${p.cv}</b><br>` +
+        `Essence dominante : <b>${p.dom}</b> <span style="color:#666">(${p.es||'—'})</span><br>` +
+        `Âge : <b>${p.age||'—'}</b> · Densité : <b>${p.den||'—'}</b><br>` +
+        `Superficie privée : <b>${p.ha} ha</b><br><br>` +
+        `<b>Pourquoi ce classement :</b>` +
+        (p.r && p.r.length ? `<ul class="raisons">${p.r.map(r=>`<li>${r}</li>`).join('')}</ul>` : `<br><span style="color:#666">Aucun facteur marquant.</span>`);
+    }
+
+    async function chargerApercu(){
+      if(apercuCharge) return;
+      apercuCharge = true;
+      etat.textContent = "Chargement de l'aperçu régional…";
+      try {
+        coucheApercu.addData(await dechiffrerJson(INDEX.apercu));
+      } catch(e){ apercuCharge = false; etat.textContent = 'Erreur de chargement des données.'; return; }
+      majAffichage();
+    }
+
+    async function chargerCellule(c){
+      if(registreCellules[c.f]) return registreCellules[c.f];
+      const data = await dechiffrerJson(c.f);
+      registreCellules[c.f] = data.features || [];
+      coucheDetail.addData(data);
+      nbDetail += c.n;
+      return registreCellules[c.f];
+    }
+
+    async function chargerCellulesVisibles(){
+      const b = carte.getBounds();
+      const aCharger = INDEX.cellules.filter(c =>
+        !registreCellules[c.f] && c.b[0] < b.getEast() && c.b[2] > b.getWest() &&
+        c.b[1] < b.getNorth() && c.b[3] > b.getSouth());
+      for(const c of aCharger){
+        etat.textContent = `Chargement du détail… ${nbDetail} / ${INDEX.total} peuplements`;
+        try { await chargerCellule(c); } catch(e){ /* cellule illisible : nouvel essai au prochain déplacement */ }
+      }
+      majAffichage();
+    }
+
+    function majAffichage(){
+      if(carte.getZoom() >= ZOOM_DETAIL){
+        if(carte.hasLayer(coucheApercu)) carte.removeLayer(coucheApercu);
+        if(!carte.hasLayer(coucheDetail)) coucheDetail.addTo(carte);
+        etat.textContent = nbDetail >= INDEX.total
+          ? `Détail complet chargé : ${INDEX.total} peuplements.`
+          : `Mode détail : ${nbDetail} / ${INDEX.total} peuplements chargés (le reste se charge au déplacement).`;
+      } else {
+        if(carte.hasLayer(coucheDetail)) carte.removeLayer(coucheDetail);
+        if(!carte.hasLayer(coucheApercu)) coucheApercu.addTo(carte);
+        etat.textContent = `Vue d'ensemble : ${INDEX.total} peuplements (aperçu simplifié). Zoome à ${ZOOM_DETAIL} et + pour le détail et les fiches.`;
+      }
+    }
+
+    let minuteur = null;
+    carte.on('moveend zoomend', () => {
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => {
+        if(!INDEX) return;
+        if(carte.getZoom() >= ZOOM_DETAIL) chargerCellulesVisibles(); else chargerApercu();
+        majAffichage();
+      }, 250);
+    });
+
+    // Toucher un lot sur la carte (propriétaire seulement, cadastre coché,
+    // zoom 15 et +) : requête ponctuelle au MapServer officiel, puis même
+    // chemin que la recherche par numéro. Pour le rôle associes : aucun
+    // changement — pas de sélection au toucher, la recherche garde le
+    // comportement actuel.
+    carte.on('click', async (e) => {
+      // Ceinture de sécurité (en plus de protegerClicsPanneau) : un
+      // clic né dans un élément d'interface ne sélectionne jamais un
+      // lot, même si sa propagation n'a pas été arrêtée en route.
+      const cibleClic = e.originalEvent && e.originalEvent.target;
+      if(cibleClic && cibleClic.closest && cibleClic.closest('.colonne-panneaux, #indicateur-calcul')) return;
+      if(!roleEstProprietaire(roleSession) || !cocheCad.checked) return;
+      if(carte.getZoom() < ZOOM_CADASTRE) return;
+      if(Date.now() - tsClicPeuplement < 400) return; // le toucher visait un peuplement
+      const pt = carte.latLngToContainerPoint(e.latlng);
+      const p1 = carte.containerPointToLatLng(L.point(pt.x - 14, pt.y - 14));
+      const p2 = carte.containerPointToLatLng(L.point(pt.x + 14, pt.y + 14));
+      try {
+        const d = await requeteCadastre({
+          geometry: [Math.min(p1.lng, p2.lng), Math.min(p1.lat, p2.lat),
+                     Math.max(p1.lng, p2.lng), Math.max(p1.lat, p2.lat)].join(','),
+          geometryType: 'esriGeometryEnvelope', inSR: '4326',
+          spatialRel: 'esriSpatialRelIntersects',
+          outFields: 'NO_LOT', returnGeometry: 'false',
+          resultRecordCount: '1', outSR: '4326'});
+        const f0 = (d.features || [])[0];
+        if(f0 && f0.attributes && f0.attributes.NO_LOT) choisirLot(f0.attributes.NO_LOT, true);
+      } catch(err){ /* pas de lot sous le doigt ou service injoignable : silencieux */ }
+    });
+
+    chargerApercu();
+  }
+</script>
+</body>
+</html>
