@@ -160,6 +160,24 @@
   #fiche-lot .valeur-ligne{display:block;margin-top:6px;font-size:.95rem;color:#0A5C6E}
   .legende details.section-valeur{margin-top:6px}
   .legende details.section-valeur summary{cursor:pointer;padding:2px 0}
+  /* Section « Valeur du bois » sur mobile (bug vécu 2026-11-11 : « je
+     ne suis pas capable cocher ») : la rangée « Base de prime » tenait
+     en UN span .taux-lot (white-space:nowrap) de ~342 px dans un
+     contenu de ~216 px — le panneau rogne le débordement
+     (overflow:hidden), donc le radio « Par valeur » tombait dans la
+     zone rognée, hors d'atteinte du tap ; et les champs prix/% n'avaient
+     aucune largeur (185 px par défaut) en nowrap, même débordement sur
+     chaque rangée. Correctif, section seulement : retour à la ligne
+     autorisé, chaque choix de base sur SA ligne en zone de tap pleine
+     largeur (le tap sur le libellé coche le radio), rangées prix en
+     flex (libellé souple + champ de 84 px qui ne sort plus). */
+  .legende details.section-valeur .taux-lot{white-space:normal}
+  .legende details.section-valeur .base-choix{display:flex;align-items:center;gap:7px;cursor:pointer;padding:7px 2px;min-height:32px;box-sizing:border-box}
+  .legende details.section-valeur .base-choix input{flex:none;width:21px;height:21px;margin:0;accent-color:#0A5C6E}
+  .legende details.section-valeur .prix-ligne{display:flex;align-items:center;gap:6px;margin:3px 0}
+  .legende details.section-valeur .prix-ligne .prix-lib{flex:1 1 auto;min-width:0}
+  .legende details.section-valeur input.prix-valeur,
+  .legende details.section-valeur input.pct-valeur{flex:none;width:84px;box-sizing:border-box;padding:2px 4px;font-size:.88rem;border:1px solid #999;border-radius:4px;margin:0}
   /* Recalcul de franchise (fiche client) : pendant l'attente de 9 à
      12 s, le montant laisse place à ce texte d'attente NET, en bloc.
      L'ancien montage (petit rond .rond-calcul en ligne dans
@@ -2647,15 +2665,15 @@
       const v0 = valeurActuelle();
       let champsPrix = '';
       for(const g of GROUPES_VALEUR){
-        champsPrix += '<span class="taux-lot">' + g + ' : <input type="number" class="prix-valeur" data-groupe="' + g +
-          '" min="0" step="50" value="' + v0.prix[g] + '" aria-label="Prix de référence du groupe ' + g + ', en dollars par hectare"> $/ha</span><br>';
+        champsPrix += '<span class="taux-lot prix-ligne"><span class="prix-lib">' + g + ' :</span><input type="number" class="prix-valeur" data-groupe="' + g +
+          '" min="0" step="50" value="' + v0.prix[g] + '" aria-label="Prix de référence du groupe ' + g + ', en dollars par hectare"><span>$/ha</span></span>';
       }
       divValeur.innerHTML = '<details class="section-valeur"><summary><b>Valeur du bois</b></summary>' +
-        '<span class="taux-lot">Base de prime : ' +
-        '<label><input type="radio" name="base-prime" value="classe"' + (v0.base === 'classe' ? ' checked' : '') + '> Par classe ($/ha)</label> ' +
-        '<label><input type="radio" name="base-prime" value="valeur"' + (v0.base === 'valeur' ? ' checked' : '') + '> Par valeur (%)</label></span><br>' +
-        '<span class="taux-lot">Prime sur la valeur : <input type="number" class="pct-valeur" min="0" step="0.1" value="' +
-        v0.pct + '" aria-label="Prime sur la valeur, en pourcentage"> %</span><br>' +
+        '<span class="taux-lot">Base de prime :</span>' +
+        '<label class="base-choix"><input type="radio" name="base-prime" value="classe"' + (v0.base === 'classe' ? ' checked' : '') + '> Par classe ($/ha)</label>' +
+        '<label class="base-choix"><input type="radio" name="base-prime" value="valeur"' + (v0.base === 'valeur' ? ' checked' : '') + '> Par valeur (%)</label>' +
+        '<span class="taux-lot prix-ligne"><span class="prix-lib">Prime sur la valeur :</span><input type="number" class="pct-valeur" min="0" step="0.1" value="' +
+        v0.pct + '" aria-label="Prime sur la valeur, en pourcentage"><span>%</span></span>' +
         '<span class="note-taux">prix de référence par groupe d\u2019essences ($/ha — peuplement mature et dense)</span><br>' +
         champsPrix +
         '<span class="note-taux">Prix : liste provisoire 2026 — Syndicat des producteurs de bois du SLSJ (spbsaglac.qc.ca) ; peuplier : PrixBois.ca.</span>' +
