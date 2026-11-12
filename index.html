@@ -1328,6 +1328,14 @@
     const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(carte);
     const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:18});
     L.control.layers({'Plan':osm,'Satellite':sat}, null, {position:'topleft'}).addTo(carte);
+    // Fond courant : il règle l'opacité du calque « Terres privées »
+    // (teinte renforcée sur le fond Satellite, comme dans l'outil Feux).
+    let fondClient = 'plan';
+    let coucheTerritoireClient = null;
+    carte.on('baselayerchange', (e) => {
+      fondClient = (e.name === 'Satellite') ? 'satellite' : 'plan';
+      appliquerStyleTerritoireClient();
+    });
     carte.fitBounds([[47.99,-74.02],[49.15,-69.97]]);
     document.getElementById('map').addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1366,6 +1374,11 @@
     ctrlCol.onAdd = () => {
       const d = L.DomUtil.create('div', 'colonne-panneaux');
       d.innerHTML =
+        '<div class="bloc-panneau panneau-cad" id="bloc-territoire">' +
+          '<div class="entete-bloc">' +
+            '<label for="coche-territoire"><input type="checkbox" id="coche-territoire" checked> Terres privées (calque bleu)</label>' +
+          '</div>' +
+        '</div>' +
         '<div class="bloc-panneau panneau-cad" id="bloc-cadastre">' +
           '<div class="entete-bloc" id="entete-cadastre">' +
             '<label for="coche-cadastre"><input type="checkbox" id="coche-cadastre" checked> Cadastre (lots)</label>' +
@@ -1414,6 +1427,21 @@
     // Elle ne dessine rien sous le zoom 15 (tuiles vides) et l'astuce
     // de zoom rappelle au besoin de zoomer pour voir les lots.
     coucheCadastre.addTo(carte);
+    // ===== Calque « Terres privées » (teinte bleue) — espace client
+    // seulement (consigne de Frédéric, 2026-11-12 : la même teinte que
+    // dans l'outil Feux). Géométrie publique (terres privées STF de la
+    // région, domaines GFSM exclus — l'univers de cette plateforme),
+    // simplifiée ~50 m, chiffrée avec la clé cliente comme les résumés
+    // (donnees-clients/terres_privees.geojson.enc). Posé dans le panneau
+    // des couches vectorielles, donc SOUS le cadastre (panneau dédié,
+    // zIndex 450) et sous le surlignage du lot choisi. Non interactif.
+    const cocheTerr = document.getElementById('coche-territoire');
+    cocheTerr.addEventListener('change', () => {
+      if(!coucheTerritoireClient) return;
+      if(cocheTerr.checked) coucheTerritoireClient.addTo(carte);
+      else carte.removeLayer(coucheTerritoireClient);
+    });
+    chargerCalqueTerritoireClient();
     // Astuce de zoom DIFFÉRÉE : majAstuceCad lit des constantes déclarées
     // plus bas dans cette fonction (astuceCad) ; l'appeler ici, tout de
     // suite, plante le reste de la construction de l'espace (piège TDZ,
@@ -1862,6 +1890,32 @@
       const dureeDistSopfeu = dureeDist - dureeDistCaserne;
       return {dureeCalcul, ecarts, dureeDist, dureeDistCaserne, dureeDistSopfeu, dureePrime, dureeAvantPrime};
     }
+    function styleTerritoireClient(){
+      return {color:'#0B5394', weight:1.6, opacity:0.9,
+        fillColor:'#2E86D6', fillOpacity: fondClient === 'satellite' ? 0.30 : 0.16};
+    }
+    function appliquerStyleTerritoireClient(){
+      if(coucheTerritoireClient) coucheTerritoireClient.setStyle(styleTerritoireClient());
+    }
+    async function chargerCalqueTerritoireClient(){
+      try {
+        const r = await fetch('donnees-clients/terres_privees.geojson.enc');
+        if(!r.ok) throw new Error('calque introuvable');
+        const buf = await r.arrayBuffer();
+        const clair = await crypto.subtle.decrypt(
+          {name:'AES-GCM', iv: new Uint8Array(buf.slice(0,12))}, cleDonnees, buf.slice(12));
+        const fc = JSON.parse(new TextDecoder().decode(clair));
+        coucheTerritoireClient = L.geoJSON(fc, {interactive:false, style: styleTerritoireClient});
+        const ct = document.getElementById('coche-territoire');
+        if(ct && ct.checked) coucheTerritoireClient.addTo(carte);
+      } catch(e) {
+        // Calque absent ou illisible : on désactive sa case, sans plus —
+        // le reste de l'espace client n'en dépend pas.
+        const ct = document.getElementById('coche-territoire');
+        if(ct) ct.disabled = true;
+      }
+    }
+
     const cacheFragmentsClient = {};
     async function dechiffrerFragmentClient(prefixe){
       if(cacheFragmentsClient[prefixe]) return cacheFragmentsClient[prefixe];
