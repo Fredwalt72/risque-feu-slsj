@@ -595,6 +595,44 @@
     return Math.max(frais.minimum, primeCalculee) + frais.ouverture;
   }
 
+  // ===== Seuil rouge (non-assurabilité, 2026-11-12) =====
+  // Réglage du propriétaire (défaut 50 %, bornes 1 à 100), persisté
+  // sur l'appareil et poussé au serveur comme les taux : quand la
+  // part du boisé en classe « Très élevé » d'un lot — ou d'un
+  // dossier, sur ses totaux combinés — atteint ce %, la propriété
+  // est « Propriété non assurable » : EXACTEMENT le même avis que
+  // la règle du boisé minimum, sans raison, ni prime, ni valeur,
+  // ni choix de franchise. Côté client, la décision vient du
+  // serveur (/prime, mêmes superficies sources) ; ici, elle est
+  // recalculée avec la même formule et le même arrondi de décision
+  // (le % arrondi à 2 décimales, comparé au seuil). Le seuil
+  // n'apparaît dans aucun texte visible des fiches. Un lot sans
+  // boisé n'est jamais frappé par cette règle (pas de division
+  // par zéro) : il reste régi par la règle du boisé minimum.
+  const CLE_ROUGE = 'risquefeu.rouge.v1';
+  const ROUGE_DEFAUT = 50;
+  function seuilRougeActuel(){
+    let s = ROUGE_DEFAUT;
+    try {
+      const brut = localStorage.getItem(CLE_ROUGE);
+      if(brut){
+        const lu = JSON.parse(brut);
+        const v = parseFloat(lu && lu.seuil);
+        if(isFinite(v) && v >= 1 && v <= 100) s = v;
+      }
+    } catch(e){ /* stockage indisponible : valeur par défaut */ }
+    return s;
+  }
+  function enregistrerSeuilRouge(s){
+    try { localStorage.setItem(CLE_ROUGE, JSON.stringify({seuil: s})); } catch(e){}
+  }
+  function partRougeNonAssurable(calc){
+    const b = calc.boiseHa || 0;
+    if(!(b > 0)) return false;
+    const t = (calc.parClasseHa && calc.parClasseHa['Très élevé']) || 0;
+    return Number((100 * t / b).toFixed(2)) >= seuilRougeActuel();
+  }
+
   // ===== Valeur du bois et base de prime (2026-11-11) =====
   // Modèle maison du propriétaire — construction documentée comme
   // telle, PAS un cubage : pour chaque peuplement d'un lot, surface
@@ -815,12 +853,12 @@
           'SOPFEU : ' + bonds5(dist.kmS) + ' bond(s))</span>';
       }
     }
-    // Règle interne du boisé minimum (même règle que côté client,
+    // Règles internes de non-assurabilité — boisé minimum ET seuil rouge (mêmes règles que côté client,
     // appliquée au boisé affiché par CETTE fiche, arrondi à 2
     // décimales) : sous le seuil, l'avis « Propriété non assurable »
     // remplace toute la section prime — ni montant, ni choix de
     // franchise. Le seuil n'apparaît dans aucun texte visible.
-    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3;
+    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3 || partRougeNonAssurable(calc);
     if(nonAssurable) html += '<p class="avis-non-assurable">Propriété non assurable</p>';
     if(calc.couvertHa <= 0){
       html += '<br><span style="color:#666">Aucun de nos peuplements ne couvre ce lot.</span>';
@@ -927,12 +965,12 @@
       }
       primeMajoreeTotale += exacteLot * facteur;
     }
-    // Règle interne du boisé minimum (même règle que côté client,
+    // Règles internes de non-assurabilité — boisé minimum ET seuil rouge (mêmes règles que côté client,
     // appliquée au boisé affiché par CETTE fiche, arrondi à 2
     // décimales) : sous le seuil, l'avis « Propriété non assurable »
     // remplace toute la section prime — ni montant, ni choix de
     // franchise. Le seuil n'apparaît dans aucun texte visible.
-    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3;
+    const nonAssurable = Number((calc.boiseHa || 0).toFixed(2)) < 3 || partRougeNonAssurable(calc);
     if(nonAssurable) html += '<p class="avis-non-assurable">Propriété non assurable</p>';
     if(calc.couvertHa <= 0){
       html += '<br><span style="color:#666">Aucun de nos peuplements ne couvre ces lots.</span>';
@@ -1002,6 +1040,7 @@
       body: JSON.stringify({cle: cleStockee, taux, ajout: franchiseActuelle().ajout,
         majoCaserne: majoActuelle().caserne, majoSopfeu: majoActuelle().sopfeu,
         ouverture: fraisActuels().ouverture, minimum: fraisActuels().minimum,
+        seuilRouge: seuilRougeActuel(),
         valeur: {prix: v.prix, pct: v.pct, base: v.base}})
     }).catch(() => { /* repli silencieux */ });
   }
@@ -1854,6 +1893,18 @@
         });
         if(!r.ok) return null;
         const d = await r.json();
+        if(d && d.nonAssurable === true){
+          // Issue « non assurable » du serveur (règle du seuil
+          // rouge) : ni prime ni valeur dans la réponse — la fiche
+          // jouera les étapes de distances (si présentes), puis
+          // l'avis « Propriété non assurable », exactement comme
+          // pour sa propre règle du boisé minimum. Le client ne
+          // reçoit que cette issue, jamais le seuil.
+          const p = {nonAssurable: true};
+          if(isFinite(Number(d.distCaserne))){ p.distCaserne = Number(d.distCaserne); p.caserne = d.caserne || ''; }
+          if(isFinite(Number(d.distSopfeu))){ p.distSopfeu = Number(d.distSopfeu); p.baseSopfeu = d.baseSopfeu || ''; }
+          return p;
+        }
         if(d && isFinite(Number(d.prime1000)) && isFinite(Number(d.prime500))){
           const p = {prime1000: Number(d.prime1000), prime500: Number(d.prime500)};
           // Valeur estimée du bois du lot (même réponse du serveur) :
@@ -2095,7 +2146,7 @@
         if(seq !== seqFicheClient) return;
         const div = document.createElement('div');
         div.className = 'ligne-revelee';
-        if(nonAssurable){
+        if(nonAssurable || (prime && prime.nonAssurable)){
           div.innerHTML = '<p class="avis-non-assurable">Propriété non assurable</p>';
           zone.appendChild(div);
         } else if(prime){
@@ -2168,7 +2219,13 @@
           body: JSON.stringify({ numeros: chiffresList }) });
         if(!r.ok) return null;
         const d = await r.json();
-        if(!d || d.ok !== true || !isFinite(Number(d.prime1000)) || !isFinite(Number(d.prime500))) return null;
+        if(!d || d.ok !== true) return null;
+        // Issue « non assurable » du serveur (règle du seuil rouge,
+        // jugée sur les totaux combinés du dossier) : la réponse ne
+        // porte ni primes ni valeur — la fiche jouera les distances
+        // par lot, puis l'avis, comme pour sa règle du boisé minimum.
+        const naMulti = d.nonAssurable === true;
+        if(!naMulti && (!isFinite(Number(d.prime1000)) || !isFinite(Number(d.prime500)))) return null;
         const parLot = {};
         (Array.isArray(d.lots) ? d.lots : []).forEach(l => {
           if(l && l.numero) parLot[String(l.numero).replace(/\D/g, '')] = {
@@ -2178,9 +2235,12 @@
             baseSopfeu: String(l.baseSopfeu || '')
           };
         });
-        return { prime1000: Number(d.prime1000), prime500: Number(d.prime500), parLot: parLot,
+        const repMulti = { parLot: parLot,
           valeur: isFinite(Number(d.valeur)) ? Number(d.valeur) : null,
           introuvables: (Array.isArray(d.introuvables) ? d.introuvables : []).map(x => String(x).replace(/\D/g, '')) };
+        if(naMulti) repMulti.nonAssurable = true;
+        else { repMulti.prime1000 = Number(d.prime1000); repMulti.prime500 = Number(d.prime500); }
+        return repMulti;
       } catch(e){ return null; }
     }
 
@@ -2339,7 +2399,7 @@
         if(seq !== seqFicheClient) return;
         const div = document.createElement('div');
         div.className = 'ligne-revelee';
-        if(nonAssurable){
+        if(nonAssurable || (prime && prime.nonAssurable)){
           div.innerHTML = '<p class="avis-non-assurable">Propriété non assurable</p>';
           zone.appendChild(div);
         } else if(prime){
@@ -2650,6 +2710,27 @@
       };
       divFrais.querySelector('input.frais-ouverture').addEventListener('input', fraisListener);
       divFrais.querySelector('input.frais-minimum').addEventListener('input', fraisListener);
+    }
+
+    // Réglage « Seuil rouge » dans la légende (propriétaire
+    // seulement) : à partir de ce % du boisé en classe « Très
+    // élevé », un lot — ou un dossier, sur ses totaux combinés —
+    // est « Propriété non assurable » (même avis que la règle du
+    // boisé minimum, sans raison affichée ; voir partRougeNonAssurable).
+    // Défaut 50 %, bornes 1 à 100. Persisté sur l'appareil et
+    // poussé au serveur comme les taux : la fiche client applique
+    // la même décision via /prime.
+    if(roleEstProprietaire(roleSession)){
+      const divRouge = document.createElement('div');
+      divRouge.innerHTML = '<span class="taux-lot">Seuil rouge : <input type="number" class="seuil-rouge" min="1" max="100" step="1" value="' +
+        seuilRougeActuel() + '" aria-label="Seuil rouge : pourcentage du boisé en classe Très élevé à partir duquel une propriété est non assurable"> %</span>';
+      corpsLegende.appendChild(divRouge);
+      divRouge.querySelector('input.seuil-rouge').addEventListener('input', (e) => {
+        const v = parseFloat(String(e.target.value).replace(',', '.'));
+        enregistrerSeuilRouge(isFinite(v) ? Math.min(100, Math.max(1, v)) : ROUGE_DEFAUT);
+        envoyerTauxServeurDiffere();
+        if(dernierCalculLot || dernierDossierLot) rendreFicheDetaillee();
+      });
     }
 
     // Section repliable « Valeur du bois » dans la légende
