@@ -904,9 +904,12 @@
     return html;
   }
   // HTML de la fiche détaillée d'un DOSSIER de lots (propriétaire
-  // seulement, sélection multiple) : superficies FUSIONNÉES des
-  // croisements des lots (calc), détail par lot (prime exacte du lot
-  // et SES distances), puis composition EXACTEMENT comme la fiche d'un
+  // seulement, sélection multiple) : croisements des lots (calc
+  // combiné pour les totaux et les règles), détail par lot (prime
+  // exacte du lot, SES distances et SON tableau — classes ou groupes
+  // d'essences selon la base, % de SON couvert ; présentation par
+  // lot, décision de Frédéric, 2026-11-12 : plus de tableau
+  // fusionné), puis composition EXACTEMENT comme la fiche d'un
   // lot : chaque prime de lot est majorée de ses propres distances,
   // les majorées sont additionnées, la franchise s'applique au total,
   // puis appliquerFrais compose UNE fois (coût minimum, puis
@@ -919,19 +922,22 @@
     const val = valeurActuelle();
     const modeValeur = val.base === 'valeur';
     const detValeur = lignesValeurHtml(calc.parGroupePondHa, val.prix);
-    let prime = 0;
-    const lignesClasses = Object.keys(COULEURS).map(c => {
-      const ha = calc.parClasseHa[c] || 0;
-      const sous = ha * (taux[c] || 0);
-      prime += sous;
-      const pct = calc.couvertHa > 0 ? 100 * ha / calc.couvertHa : 0;
-      return '<tr><td><span class="pastille" style="background:' + COULEURS[c] + '"></span>' + c + '</td>' +
-        '<td>' + fmtNombre(ha, 2) + '</td><td>' + fmtNombre(pct, 1) + '</td>' +
-        '<td>' + fmtNombre(taux[c] || 0, 0) + '</td><td>' + fmtNombre(sous, 0) + '</td></tr>';
-    }).join('');
-    const lignes = modeValeur ? detValeur.lignes : lignesClasses;
     const enteteTable = modeValeur ? ENTETE_TABLE_VALEUR :
       '<table class="prime"><tr><th>Classe</th><th>ha</th><th>% du couvert</th><th>$/ha/an</th><th>$ / an</th></tr>';
+    // Tableau des classes d'UN lot : mêmes colonnes et mêmes formats
+    // que la fiche d'un lot, mais % du couvert DE CE LOT (le couvert
+    // d'un lot = somme de ses classes, comme dans croiserLot).
+    const lignesClassesLot = (d) => {
+      const couvertLot = Object.keys(COULEURS).reduce((s, c) => s + (d.parClasseHa[c] || 0), 0);
+      return Object.keys(COULEURS).map(c => {
+        const ha = d.parClasseHa[c] || 0;
+        const sous = ha * (taux[c] || 0);
+        const pct = couvertLot > 0 ? 100 * ha / couvertLot : 0;
+        return '<tr><td><span class="pastille" style="background:' + COULEURS[c] + '"></span>' + c + '</td>' +
+          '<td>' + fmtNombre(ha, 2) + '</td><td>' + fmtNombre(pct, 1) + '</td>' +
+          '<td>' + fmtNombre(taux[c] || 0, 0) + '</td><td>' + fmtNombre(sous, 0) + '</td></tr>';
+      }).join('');
+    };
     let html = '<button type="button" id="effacer-lot">✕ Effacer</button>' +
       'Dossier de <b>' + details.length + ' lots</b> : ' + details.map(d => d.numero).join(', ') + '<br>' +
       'Superficie totale : <b>' + fmtNombre(calc.lotHa, 2) + ' ha</b><br>' +
@@ -964,6 +970,15 @@
         }
       }
       primeMajoreeTotale += exacteLot * facteur;
+      // Tableau de CE lot, à la suite de son détail : en base
+      // « classe », ses classes (% de SON couvert) ; en base
+      // « valeur », son détail par groupe d'essences. Un lot sans
+      // aucune superficie ne produit pas de tableau vide.
+      if(modeValeur){
+        if(detLot.lignes) html += enteteTable + detLot.lignes + '</table>';
+      } else if(Object.keys(COULEURS).some(c => (d.parClasseHa[c] || 0) > 0)){
+        html += enteteTable + lignesClassesLot(d) + '</table>';
+      }
     }
     // Règles internes de non-assurabilité — boisé minimum ET seuil rouge (mêmes règles que côté client,
     // appliquée au boisé affiché par CETTE fiche, arrondi à 2
@@ -979,7 +994,6 @@
       const frais = fraisActuels();
       const baseFrais = appliquerFrais(pf.base, frais);
       const finaleFrais = appliquerFrais(pf.finale, frais);
-      html += enteteTable + lignes + '</table>';
       if(!nonAssurable){
         html += '<label>Franchise : <select id="choix-franchise">' +
         '<option value="1000"' + (franchise.choix === '1000' ? ' selected' : '') + '>1 000 $</option>' +
@@ -999,7 +1013,6 @@
       }
       }
     } else {
-      html += enteteTable + lignes + '</table>';
       if(!nonAssurable) html += '<span class="prime-totale">Prime indicative : ' + fmtNombre(appliquerFrais(primeMajoreeTotale, fraisActuels()), 0) + ' $/an</span>';
     }
     // Valeur estimée du bois du dossier : totale, après le montant de
@@ -2301,12 +2314,13 @@
     // ===== Fiche client COMBINÉE d'un dossier de lots =====
     // Même présentation étagée que la fiche d'un lot (même
     // planificateur, mêmes durées, même indicateur central, mêmes
-    // deux étapes de distances séparées) ; les superficies sont les
-    // SOMMES des résumés précalculés des lots (essences et reste
-    // fusionnés par nom et retriés, pourcentages recalculés sur le
-    // total combiné). Les distances se révèlent par étape, UNE ligne
-    // compacte par lot, dans l'ordre du dossier. La prime vient du
-    // mode multi de /prime (composition unique côté serveur).
+    // deux étapes de distances séparées) ; les superficies sont
+    // présentées PAR LOT (décision de Frédéric, 2026-11-12) : chaque
+    // lot a son propre bloc, identique à sa fiche simple, avec SES
+    // pourcentages — aucun tableau fusionné, aucun % du dossier.
+    // Les distances se révèlent par étape, UNE ligne compacte par
+    // lot, dans l'ordre du dossier. La prime vient du mode multi de
+    // /prime (composition unique côté serveur).
     async function afficherFicheClientCombinee(){
       const dossier = selectionClient.slice();
       if(dossier.length < 2) return;
@@ -2346,50 +2360,60 @@
         attente.innerHTML = 'Aucune donnée d\u2019inventaire disponible pour ces lots.';
         return;
       }
-      let lotHa = 0, couvertHa = 0;
-      const essMap = {}, rstMap = {};
-      avec.forEach(x => {
-        lotHa += x.resume.l || 0;
-        couvertHa += x.resume.c || 0;
-        for(const k in (x.resume.e || {})) essMap[k] = (essMap[k] || 0) + x.resume.e[k];
-        for(const k in (x.resume.r || {})) rstMap[k] = (rstMap[k] || 0) + x.resume.r[k];
+      // Présentation PAR LOT : le bloc de chaque lot reprend, ligne
+      // pour ligne, la construction de sa fiche simple (mêmes titres
+      // de section, mêmes formats, % calculés sur CE lot). Les totaux
+      // combinés ne survivent que comme valeurs internes : la
+      // superficie totale de l'en-tête et le boisé total de la règle
+      // du boisé minimum, toujours jugée sur le dossier entier.
+      let lotTotalHa = 0, boiseTotalHa = 0;
+      const blocsParLot = avec.map(x => {
+        const lotHa = x.resume.l || 0, couvertHa = x.resume.c || 0;
+        const essences = Object.entries(x.resume.e || {}).sort((a, b) => b[1] - a[1]);
+        const restes = Object.entries(x.resume.r || {}).sort((a, b) => b[1] - a[1]);
+        const boiseHa = essences.reduce((somme, kv) => somme + kv[1], 0);
+        lotTotalHa += lotHa;
+        boiseTotalHa += boiseHa;
+        const pct = (ha) => lotHa > 0 ? fmtNombre(100 * ha / lotHa, 1) + ' %' : '—';
+        const pas = [];
+        pas.push('Lot <b>' + x.sel.numero + '</b><br>Superficie du lot : <b>' + fmtNombre(lotHa, 2) + ' ha</b>');
+        essences.forEach(([nom, ha], i) => {
+          pas.push((i === 0 ? '<div class="titre-section">Superficie boisée par essence dominante</div>' : '') +
+            '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+            fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+        });
+        restes.forEach(([nom, ha], i) => {
+          pas.push((i === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+            '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
+            fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
+        });
+        const nonClasse = lotHa - couvertHa;
+        if(nonClasse > 0.005){
+          pas.push((restes.length === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
+            '<div class="ligne-detail"><span>Non classé par l\u2019inventaire forestier</span><span class="val"><b>' +
+            fmtNombre(nonClasse, 2) + ' ha</b> · ' + pct(nonClasse) + '</span></div>');
+        }
+        pas.push('<div class="total-client">Superficie boisée : ' + fmtNombre(boiseHa, 2) +
+          ' ha (' + pct(boiseHa) + ' du lot)</div>');
+        return pas;
       });
-      const essences = Object.entries(essMap).sort((a, b) => b[1] - a[1]);
-      const restes = Object.entries(rstMap).sort((a, b) => b[1] - a[1]);
-      const boiseHa = essences.reduce((somme, kv) => somme + kv[1], 0);
       // Même règle interne du boisé minimum, appliquée au boisé TOTAL
-      // combiné du dossier (arrondi à 2 décimales comme affiché).
-      const nonAssurable = Number(boiseHa.toFixed(2)) < 3;
-      const pct = (ha) => lotHa > 0 ? fmtNombre(100 * ha / lotHa, 1) + ' %' : '—';
+      // combiné du dossier (arrondi à 2 décimales).
+      const nonAssurable = Number(boiseTotalHa.toFixed(2)) < 3;
       const etapes = [];
       let entete = 'Dossier de ' + dossier.length + ' lots<br>' +
         dossier.map(sel => 'Lot <b>' + sel.numero + '</b>').join(' · ') +
-        '<br>Superficie totale des lots : <b>' + fmtNombre(lotHa, 2) + ' ha</b>';
+        '<br>Superficie totale des lots : <b>' + fmtNombre(lotTotalHa, 2) + ' ha</b>';
       const sans = resumes.filter(x => !x.resume);
       if(sans.length){
         entete += '<br><span style="color:#666">Sans données d\u2019inventaire (exclus des superficies) : ' +
           sans.map(x => 'lot ' + x.sel.numero).join(', ') + '.</span>';
       }
       etapes.push(entete);
-      essences.forEach(([nom, ha], i) => {
-        etapes.push((i === 0 ? '<div class="titre-section">Superficie boisée par essence dominante</div>' : '') +
-          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
-          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
-      });
-      restes.forEach(([nom, ha], i) => {
-        etapes.push((i === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
-          '<div class="ligne-detail"><span>' + nom + '</span><span class="val"><b>' +
-          fmtNombre(ha, 2) + ' ha</b> · ' + pct(ha) + '</span></div>');
-      });
-      const nonClasse = lotHa - couvertHa;
-      if(nonClasse > 0.005){
-        etapes.push((restes.length === 0 ? '<div class="titre-section">Le reste du lot</div>' : '') +
-          '<div class="ligne-detail"><span>Non classé par l\u2019inventaire forestier</span><span class="val"><b>' +
-          fmtNombre(nonClasse, 2) + ' ha</b> · ' + pct(nonClasse) + '</span></div>');
-      }
-      etapes.push('<div class="total-client">Superficie boisée : ' + fmtNombre(boiseHa, 2) +
-        ' ha (' + pct(boiseHa) + ' du dossier)</div>' +
-        '<p class="mention-cad">Superficies indicatives, calculées à partir de l\u2019inventaire écoforestier du MRNF et du cadastre du Québec. Les chemins ne sont cartographiés qu\u2019en partie dans l\u2019inventaire forestier.</p>');
+      blocsParLot.forEach(pas => pas.forEach(p => etapes.push(p)));
+      // La mention ferme le bloc du dernier lot, comme elle ferme la
+      // fiche d'un lot seul (même étape de révélation que son total).
+      etapes[etapes.length - 1] += '<p class="mention-cad">Superficies indicatives, calculées à partir de l\u2019inventaire écoforestier du MRNF et du cadastre du Québec. Les chemins ne sont cartographiés qu\u2019en partie dans l\u2019inventaire forestier.</p>';
 
       const plan = planifierSequence(etapes.length);
       let instant = plan.dureeCalcul;
